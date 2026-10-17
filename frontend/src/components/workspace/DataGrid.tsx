@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { ChevronDown, ChevronUp, Eye, FileSpreadsheet, Import, Printer, RefreshCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,6 +9,15 @@ import type { Row, SheetSource } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const NONE = "__none__";
+const MIN_W = 60;
+const MAX_AUTO_W = 280;
+
+/** Content-based width: header vs. longest of the first 50 values. */
+function autoWidth(col: string, rows: Row[]): number {
+  const longest = rows.slice(0, 50).reduce((m, r) => Math.max(m, (r[col] ?? "").length), 0);
+  const header = col.length * 8.5 + 30; // headers are bold and often UPPERCASE
+  return Math.max(MIN_W, Math.min(MAX_AUTO_W, Math.round(Math.max(header, longest * 7 + 24))));
+}
 
 export interface GridSelection {
   key: string; // sheet url the selection belongs to
@@ -37,6 +47,19 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
   onToggle: () => void;
 }) {
   const [q, setQ] = useState("");
+  const [widths, setWidths] = useState<Record<string, number>>({});
+  const widthOf = (c: string) => widths[c] ?? autoWidth(c, rows);
+  const startResize = (e: ReactPointerEvent<HTMLSpanElement>, col: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = widthOf(col);
+    const onMove = (ev: PointerEvent) => setWidths((w) => ({ ...w, [col]: Math.max(MIN_W, Math.round(startW + ev.clientX - startX)) }));
+    const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); document.body.style.cursor = ""; };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
   const visible = rows.map((r, i) => ({ r, i })).filter(({ r }) => !q || Object.values(r).some((v) => v.toLowerCase().includes(q.toLowerCase())));
   const isOn = (i: number) => !selection.excluded.has(i);
   const allOn = visible.length > 0 && visible.every(({ i }) => isOn(i));
@@ -110,16 +133,34 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
               </div>
             </div>
           ) : (
-            <table className="w-max min-w-full border-collapse text-xs" data-testid="sheets-data-table">
+            <table className="table-fixed border-collapse text-xs" style={{ width: 40 + 40 + 80 + 40 + columns.reduce((n, c) => n + widthOf(c), 0) }} data-testid="sheets-data-table">
+              <colgroup>
+                <col style={{ width: 40 }} />
+                <col style={{ width: 40 }} />
+                <col style={{ width: 80 }} />
+                {columns.map((c) => <col key={c} style={{ width: widthOf(c) }} />)}
+                <col style={{ width: 40 }} />
+              </colgroup>
               <thead className="sticky top-0 z-10 bg-[#F3F4F6] text-left text-[#374151]">
                 <tr>
-                  <th className="w-10 border-b border-r border-[#E5E7EB] px-2 py-1.5 text-center font-medium text-[#9CA3AF]">#</th>
-                  <th className="w-10 border-b border-r border-[#E5E7EB] px-2 py-1.5 text-center">
+                  <th className="border-b border-r border-[#E5E7EB] px-2 py-1.5 text-center font-medium text-[#9CA3AF]">#</th>
+                  <th className="border-b border-r border-[#E5E7EB] px-2 py-1.5 text-center">
                     <Checkbox data-testid="select-all-rows-checkbox" checked={allOn} onCheckedChange={() => setOn(visible.map((v) => v.i), !allOn)} />
                   </th>
-                  <th className="w-24 border-b border-r border-[#E5E7EB] px-2 py-1.5 font-semibold">Print qty</th>
-                  {columns.map((c) => <th key={c} className="border-b border-r border-[#E5E7EB] px-2 py-1.5 font-semibold">{c}</th>)}
-                  <th className="w-10 border-b border-[#E5E7EB]" />
+                  <th className="border-b border-r border-[#E5E7EB] px-2 py-1.5 font-semibold">Qty</th>
+                  {columns.map((c) => (
+                    <th key={c} data-testid={`grid-col-header-${c}`} title={c} className="relative truncate border-b border-r border-[#E5E7EB] px-2 py-1.5 font-semibold">
+                      {c}
+                      <span
+                        data-testid={`grid-col-resize-${c}`}
+                        title="Drag to resize · double-click to auto-fit"
+                        onPointerDown={(e) => startResize(e, c)}
+                        onDoubleClick={() => setWidths(({ [c]: _drop, ...rest }) => rest)}
+                        className="absolute right-0 top-0 z-10 h-full w-2.5 cursor-col-resize touch-none after:absolute after:right-0.5 after:top-1/4 after:h-1/2 after:w-0.5 after:rounded after:bg-[#C7CCD3] after:transition-colors after:duration-150 hover:after:bg-[#1A73E8]"
+                      />
+                    </th>
+                  ))}
+                  <th className="border-b border-[#E5E7EB]" />
                 </tr>
               </thead>
               <tbody>
@@ -134,7 +175,7 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
                         onChange={(e) => onSelection({ ...selection, qty: { ...selection.qty, [i]: Math.max(1, Math.min(999, parseInt(e.target.value) || 1)) } })}
                         className="h-6 w-full rounded border border-transparent bg-transparent px-1.5 font-mono text-xs outline-none focus:border-[#1A73E8] focus:bg-white" />
                     </td>
-                    {columns.map((c) => <td key={c} className="max-w-56 truncate border-b border-r border-[#EEF0F2] px-2 py-1">{r[c]}</td>)}
+                    {columns.map((c) => <td key={c} title={r[c]} className="truncate border-b border-r border-[#EEF0F2] px-2 py-1">{r[c]}</td>)}
                     <td className="border-b border-[#EEF0F2] px-1 text-center">
                       <Button variant="ghost" size="icon-xs" title="Print just this label" data-testid={`print-row-${i}`} onClick={() => onPrintRow(r)}><Printer /></Button>
                     </td>

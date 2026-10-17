@@ -11,12 +11,15 @@ Barcode/QR label designer with multiple saved templates per brand, printing batc
 - templates: GET/POST /templates, GET/PUT/DELETE /templates/{id}, POST /templates/{id}/duplicate
 - sources: GET/POST /sources, PUT/DELETE /sources/{id}
 - POST /sheets/fetch {url} → {columns, rows, csv_url}. Converts Google Sheets edit/share/publish URLs (keeps gid) to CSV export; url "sample" returns built-in sample data. Private sheet → 400 with detail.
+- POST /sheets/upload (multipart `file`, .csv/.tsv/.xlsx) → list of created SheetSource; each non-empty Excel tab becomes its own source (brand = tab name), data stored in `sheet_uploads` and referenced by url `upload:<id>`. Fetch with that url returns stored rows.
+- SheetData also has `name` (sheet file/tab name from Google export or upload).
 - GET /sheets/sample
 
 ## Pages
 - `/` template library grouped/filtered by brand; create (size presets), duplicate, delete.
-- `/editor/:id` drag/resize canvas (mm), add text/barcode/QR/shape/image, inspector, column chips binding from a saved sheet, live data preview with row nav, save (Ctrl+S).
-- `/print?template=id` choose saved sheet or paste URL, template, field mapping (auto by name), filter by brand column + search, select rows, layout roll / A4 / Letter with margin/gap/copies, preview, Print selected or per-row single label print (window.print, @media print renders only .print-root).
+- Loading a Google Sheet link (editor or Print Studio) AUTO-SAVES it as a source (name from the sheet's export filename).
+- `/editor/:id` left dock (no tabs): Add elements, Sheet variables (source select defaults to newest saved sheet; link/upload importer; column chips — click inserts {{col}} into selected element or creates a new text element if none selected), Layers. drag/resize canvas (mm), add text/barcode/QR/shape/image, inspector, column chips binding from a saved sheet, live data preview with row nav, save (Ctrl+S).
+- `/print?template=id` Sheet variables panel shows column chips (click copies {{col}}). choose saved sheet or paste URL, template, field mapping (auto by name), filter by brand column + search, select rows, layout roll / A4 / Letter with margin/gap/copies, preview, Print selected or per-row single label print (window.print, @media print renders only .print-root).
 
 ## Seed (backend/seed.py, idempotent)
 - Templates: tpl-aura-hangtag (AURA Studio), tpl-nordic-jar (Nordic Hearth Roastery), tpl-omni-bin (OmniParts Depot)

@@ -3,8 +3,13 @@ import io
 import re
 from typing import List
 
+import uuid
+from pathlib import PurePath
+from urllib.parse import unquote
+
 import httpx
-from fastapi import APIRouter, HTTPException
+import openpyxl
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from lib.db import db
 from models.labels import SheetData, SheetFetchRequest, SheetSource, SheetSourceCreate
@@ -45,9 +50,21 @@ def to_csv_url(url: str) -> str:
     )
 
 
+def _cell(v) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))  # keep barcodes like 5901234123457 intact
+    return str(v)
+
+
 def parse_csv(text: str) -> tuple[List[str], List[dict[str, str]]]:
-    reader = csv.reader(io.StringIO(text.lstrip("\ufeff")))
-    all_rows = [r for r in reader if any(c.strip() for c in r)]
+    return parse_table(list(csv.reader(io.StringIO(text.lstrip("\ufeff")))))
+
+
+def parse_table(table: List[list]) -> tuple[List[str], List[dict[str, str]]]:
+    all_rows = [[_cell(c) for c in r] for r in table]
+    all_rows = [r for r in all_rows if any(c.strip() for c in r)]
     if not all_rows:
         return [], []
     raw_headers = all_rows[0]
@@ -65,6 +82,11 @@ def parse_csv(text: str) -> tuple[List[str], List[dict[str, str]]]:
 async def fetch_sheet(body: SheetFetchRequest):
     if body.url.strip() == "sample":
         return sample_sheet()
+    if body.url.startswith("upload:"):
+        doc = await db.sheet_uploads.find_one({"id": body.url[7:]}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Uploaded sheet not found")
+        return SheetData(columns=doc["columns"], rows=doc["rows"], csv_url=body.url, name=doc["name"])
     csv_url = to_csv_url(body.url)
     if not csv_url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Enter a full https:// Google Sheets or CSV URL")
@@ -82,13 +104,56 @@ async def fetch_sheet(body: SheetFetchRequest):
     columns, rows = parse_csv(res.text)
     if not columns:
         raise HTTPException(status_code=400, detail="The sheet is empty")
-    return SheetData(columns=columns, rows=rows, csv_url=csv_url)
+    return SheetData(columns=columns, rows=rows, csv_url=csv_url, name=_filename(res.headers.get("content-disposition", "")))
+
+
+def _filename(disposition: str) -> str:
+    m = re.search(r"filename\*=UTF-8''([^;]+)", disposition) or re.search(r'filename="?([^";]+)"?', disposition)
+    return PurePath(unquote(m.group(1))).stem if m else ""
+
+
+@router.post("/sheets/upload", response_model=List[SheetSource], status_code=201)
+async def upload_sheet(file: UploadFile = File(...)):
+    """CSV or Excel upload. Every non-empty Excel tab becomes its own saved sheet (one per brand)."""
+    raw = await file.read()
+    if len(raw) > 10_000_000:
+        raise HTTPException(status_code=400, detail="File must be under 10 MB")
+    fname = file.filename or "upload"
+    stem = PurePath(fname).stem
+    tables: List[tuple[str, List[list]]] = []
+    if fname.lower().endswith((".xlsx", ".xlsm")):
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Could not read that Excel file") from exc
+        tables = [(ws.title, [list(r) for r in ws.iter_rows(values_only=True)]) for ws in wb.worksheets]
+    elif fname.lower().endswith((".csv", ".txt", ".tsv")):
+        text = raw.decode("utf-8-sig", errors="replace")
+        delim = "\t" if fname.lower().endswith(".tsv") else ","
+        tables = [("", list(csv.reader(io.StringIO(text), delimiter=delim)))]
+    else:
+        raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx file")
+    created: List[SheetSource] = []
+    multi = len(tables) > 1
+    for tab, table in tables:
+        columns, rows = parse_table(table)
+        if not columns:
+            continue
+        upload_id = str(uuid.uuid4())
+        name = f"{stem} — {tab}" if multi else stem
+        await db.sheet_uploads.insert_one({"id": upload_id, "name": name, "columns": columns, "rows": rows})
+        src = SheetSource(name=name, brand=tab if multi else "General", url=f"upload:{upload_id}")
+        await db.sheet_sources.insert_one(src.model_dump())
+        created.append(src)
+    if not created:
+        raise HTTPException(status_code=400, detail="The file has no data rows")
+    return created
 
 
 @router.get("/sheets/sample", response_model=SheetData)
 def sample_sheet():
     rows = [dict(zip(SAMPLE_COLUMNS, r)) for r in SAMPLE_ROWS]
-    return SheetData(columns=SAMPLE_COLUMNS, rows=rows, csv_url="sample")
+    return SheetData(columns=SAMPLE_COLUMNS, rows=rows, csv_url="sample", name="Sample multi-brand sheet")
 
 
 @router.get("/sources", response_model=List[SheetSource])
@@ -116,6 +181,9 @@ async def update_source(id: str, body: SheetSourceCreate):
 
 @router.delete("/sources/{id}", status_code=204)
 async def delete_source(id: str):
-    res = await db.sheet_sources.delete_one({"id": id})
-    if res.deleted_count == 0:
+    doc = await db.sheet_sources.find_one({"id": id}, {"_id": 0})
+    if not doc:
         raise HTTPException(status_code=404, detail="Source not found")
+    await db.sheet_sources.delete_one({"id": id})
+    if doc["url"].startswith("upload:"):
+        await db.sheet_uploads.delete_one({"id": doc["url"][7:]})

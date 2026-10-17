@@ -13,7 +13,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SheetImporter, VariableChips } from "@/components/SheetImporter";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiGet, apiPut } from "@/lib/api";
@@ -103,7 +103,8 @@ function EditorInner({ initial }: { initial: Template }) {
   const selected = tpl.elements.find((e) => e.id === selectedId) ?? null;
 
   const sources = useQuery({ queryKey: ["sources"], queryFn: fetchSources });
-  const source = sources.data?.find((s) => s.id === sourceId);
+  const activeSourceId = sourceId || sources.data?.[0]?.id || ""; // newest sheet by default
+  const source = sources.data?.find((s) => s.id === activeSourceId);
   const sheet = useQuery({ queryKey: ["sheet", source?.url], queryFn: () => fetchSheet(source!.url), enabled: !!source });
   const rows = sheet.isError ? [] : (sheet.data?.rows ?? []);
   const row = livePreview && rows.length ? rows[Math.min(rowIdx, rows.length - 1)] : null;
@@ -177,8 +178,13 @@ function EditorInner({ initial }: { initial: Template }) {
   };
 
   const insertColumn = (col: string) => {
-    if (!selected) return toast.info("Select an element on the label first");
     const tag = `{{${col}}}`;
+    if (!selected) {
+      const el = { ...newElement("text", tpl), content: tag };
+      update({ elements: [...tpl.elements, el] });
+      setSelectedId(el.id);
+      return;
+    }
     if (selected.type === "image") updateEl(selected.id, { image_url: tag });
     else if (selected.type === "text") updateEl(selected.id, { content: selected.content ? `${selected.content} ${tag}` : tag });
     else if (selected.type === "rect") return toast.info("Shapes cannot hold data");
@@ -232,66 +238,59 @@ function EditorInner({ initial }: { initial: Template }) {
       <div className="flex min-h-0 flex-1">
         {/* Left dock */}
         <aside className={cn("w-72 shrink-0 overflow-y-auto border-r", panel)} data-testid="left-dock">
-          <Tabs defaultValue="elements">
-            <TabsList className="m-3 w-[calc(100%-1.5rem)]">
-              <TabsTrigger value="elements" data-testid="dock-tab-elements">Elements</TabsTrigger>
-              <TabsTrigger value="data" data-testid="dock-tab-data">Sheet data</TabsTrigger>
-            </TabsList>
-            <TabsContent value="elements" className="px-3 pb-4">
-              <div className="grid grid-cols-2 gap-2">
-                {ADDERS.map((a) => (
-                  <button key={a.type} data-testid={a.testId} onClick={() => add(a.type)}
-                    className="flex flex-col items-start gap-2 rounded-lg border border-[#2A303C] bg-[#1A1E24] p-3 text-left text-xs text-neutral-300 transition-[border-color,background-color] duration-150 hover:border-[#FF5B26] hover:bg-[#1F242C] [&_svg]:size-4 [&_svg]:text-[#FF7143]">
-                    {a.icon}
-                    {a.label}
+          <section className="border-b border-[#2A303C] p-3">
+            <h4 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">Add elements</h4>
+            <div className="grid grid-cols-3 gap-1.5">
+              {ADDERS.map((a) => (
+                <button key={a.type} data-testid={a.testId} onClick={() => add(a.type)}
+                  className="flex flex-col items-center gap-1.5 rounded-lg border border-[#2A303C] bg-[#1A1E24] px-1 py-2.5 text-[11px] text-neutral-300 transition-[border-color,background-color] duration-150 hover:border-[#FF5B26] hover:bg-[#1F242C] [&_svg]:size-4 [&_svg]:text-[#FF7143]">
+                  {a.icon}
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="grid gap-3 border-b border-[#2A303C] p-3" data-testid="sheet-variables-panel">
+            <h4 className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#06B6D4]">Sheet variables</h4>
+            <Select value={activeSourceId} onValueChange={(v: string) => { setSourceId(v); setRowIdx(0); setLivePreview(true); }}>
+              <SelectTrigger className="w-full" data-testid="editor-source-select">
+                <SelectValue placeholder="Choose a sheet">{(v) => sources.data?.find((s) => s.id === v)?.name ?? "Choose a sheet"}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {(sources.data ?? []).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <SheetImporter sources={sources.data ?? []} templateId={initial.id}
+              onImported={(created) => { setSourceId(created[0].id); setRowIdx(0); setLivePreview(true); }} />
+            {sheet.isFetching && <p className="text-xs text-neutral-500">Loading sheet…</p>}
+            {sheet.isError && <p className="text-xs text-red-400" data-testid="editor-sheet-error">Could not load this sheet.</p>}
+            {columns.length > 0 && (
+              <div>
+                <p className="mb-2 text-[11px] leading-relaxed text-neutral-400">
+                  Column headers from <span className="text-white">{source?.name}</span>. Click one to insert it into the selected element — or add it as new text if nothing is selected.
+                </p>
+                <VariableChips columns={columns} onPick={insertColumn} />
+              </div>
+            )}
+          </section>
+
+          <section className="p-3">
+            <h4 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">Layers</h4>
+            <ul className="grid gap-1" data-testid="layers-list">
+              {[...tpl.elements].reverse().map((el) => (
+                <li key={el.id}>
+                  <button data-testid={`layer-item-${el.id}`} onClick={() => setSelectedId(el.id)}
+                    className={cn("flex w-full items-center gap-2 truncate rounded px-2 py-1.5 text-left text-xs transition-colors duration-150",
+                      el.id === selectedId ? "bg-[#FF5B26]/15 text-[#FF7143]" : "text-neutral-400 hover:bg-[#1F242C]")}>
+                    <span className="font-mono uppercase text-[9px] text-neutral-500">{el.type}</span>
+                    <span className="truncate">{el.content || (el.image_url.startsWith("data:") ? "uploaded image" : el.image_url) || "—"}</span>
                   </button>
-                ))}
-              </div>
-              <h4 className="mb-2 mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">Layers</h4>
-              <ul className="grid gap-1" data-testid="layers-list">
-                {[...tpl.elements].reverse().map((el) => (
-                  <li key={el.id}>
-                    <button data-testid={`layer-item-${el.id}`} onClick={() => setSelectedId(el.id)}
-                      className={cn("flex w-full items-center gap-2 truncate rounded px-2 py-1.5 text-left text-xs transition-colors duration-150",
-                        el.id === selectedId ? "bg-[#FF5B26]/15 text-[#FF7143]" : "text-neutral-400 hover:bg-[#1F242C]")}>
-                      <span className="font-mono uppercase text-[9px] text-neutral-500">{el.type}</span>
-                      <span className="truncate">{el.content || el.image_url.slice(0, 30) || "—"}</span>
-                    </button>
-                  </li>
-                ))}
-                {tpl.elements.length === 0 && <li className="text-xs text-neutral-500">Add an element to begin.</li>}
-              </ul>
-            </TabsContent>
-            <TabsContent value="data" className="grid gap-4 px-3 pb-4">
-              <div className="grid gap-1.5">
-                <Label className="text-xs">Preview data source</Label>
-                <Select value={sourceId} onValueChange={(v: string) => { setSourceId(v); setRowIdx(0); setLivePreview(true); }}>
-                  <SelectTrigger className="w-full" data-testid="editor-source-select">
-                    <SelectValue placeholder="Choose a sheet">{(v) => sources.data?.find((s) => s.id === v)?.name ?? "Choose a sheet"}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(sources.data ?? []).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-neutral-500">Add more Google Sheets in the <Link to="/print" className="text-[#FF7143] underline">Print Studio</Link>.</p>
-              </div>
-              {sheet.isFetching && <p className="text-xs text-neutral-500">Loading sheet…</p>}
-              {sheet.isError && <p className="text-xs text-red-400" data-testid="editor-sheet-error">Could not load this sheet.</p>}
-              {columns.length > 0 && (
-                <div>
-                  <p className="mb-2 text-[11px] text-neutral-400">Select an element, then click a column to bind it.</p>
-                  <div className="flex flex-wrap gap-1.5" data-testid="column-chips">
-                    {columns.map((c) => (
-                      <button key={c} data-testid={`column-chip-${c}`} onClick={() => insertColumn(c)}
-                        className="rounded border border-[#3F4858] bg-[#1F242C] px-2 py-1 font-mono text-[11px] text-[#06B6D4] transition-colors duration-150 hover:border-[#06B6D4]">
-                        {`{{${c}}}`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+                </li>
+              ))}
+              {tpl.elements.length === 0 && <li className="text-xs text-neutral-500">Add an element to begin.</li>}
+            </ul>
+          </section>
         </aside>
 
         {/* Canvas */}

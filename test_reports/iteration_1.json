@@ -1,0 +1,110 @@
+{
+  "iteration": 1,
+  "mode": "generate",
+  "summary": "All 8 acceptance-matrix criteria exercised: 4 backend pytest files + 8 browser checks. Restored missing seed source 'src-sample' (Sample multi-brand sheet) via existing idempotent backend/seed.py before testing, matching briefing seed_facts. All artifacts passed.",
+  "passed": 12,
+  "failed": 0,
+  "flaky": 0,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": false,
+  "bugs": [],
+  "action_items": [
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "Environment state before testing had only one residual source ('CORRADO V2 - Sheet1') and was missing the seeded 'src-sample' (Sample multi-brand sheet) that seed_facts describes. Ran `python /app/backend/seed.py` (idempotent, data-only) to restore it so the matrix could be verified against the described baseline. No application code was touched."
+    },
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "Briefing's acceptance_matrix text describes bound content as single-brace '{barcode_value}', but the app consistently uses double-brace '{{barcode_value}}' placeholders end-to-end (templates, chips, mapping panel). Treated this as a briefing wording simplification, not a bug, since behavior is internally consistent."
+    }
+  ],
+  "checks": [
+    {
+      "criterion": "Uploading a CSV/Excel file in the editor's left dock 'Sheet variables' section saves it (2-tab xlsx -> 2 saved sheets)",
+      "name": "editor-upload-xlsx-creates-sheets",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Uploaded /tmp/brands.xlsx via sheet-upload-input on /editor/tpl-aura-hangtag; toast '2 tabs imported as separate sheets' shown; editor-source-select auto-selected 'brands — AURA Studio'; column-chip-SKU/Product Name/Barcode/Price visible; dropdown listed both 'brands — AURA Studio' and 'brands — OmniParts'."
+    },
+    {
+      "criterion": "Uploading /tmp/brands.xlsx creates 2 saved sources with correct per-tab columns (API)",
+      "name": "test_tscheck_sheet_upload_xlsx.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /sheets/upload (brands.xlsx) -> 201, 2 sources named 'brands — AURA Studio' and 'brands — OmniParts'; both present in GET /sources; POST /sheets/fetch for each returned columns ['SKU','Product Name','Barcode','Price'] and ['Part No','Desc','Code'] respectively."
+    },
+    {
+      "criterion": "Sheet variables section is visible without switching tabs and lists selected sheet's column headers",
+      "name": "editor-sheet-variables-visible",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "On /editor/tpl-aura-hangtag, left-dock and sheet-variables-panel visible on load; after selecting 'Sample multi-brand sheet', column-chip-sku/price/barcode_value visible. Re-ran once against public URL https://sheets-label-printer.preview.emergentagent.com -> passed."
+    },
+    {
+      "criterion": "Clicking a variable chip with an element selected binds it; with nothing selected it adds a new text element",
+      "name": "editor-chip-binds-element",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Selected barcode element a6, clicked column-chip-barcode_value -> prop-content-input became '{{barcode_value}}'. Deselected, clicked column-chip-sku -> new element auto-selected, prop-content-input '{{sku}}', layers-list count increased by 1."
+    },
+    {
+      "criterion": "Live preview uses sheet data: LIVE DATA toggle + row-nav-next changes canvas values",
+      "name": "editor-live-preview-row-nav",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Selecting a sheet auto-set preview-toggle-raw-vs-data to 'LIVE DATA'; row-nav-indicator moved 'Row 1 / 9' -> 'Row 2 / 9'; canvas-label-stage innerText changed after clicking row-nav-next."
+    },
+    {
+      "criterion": "Uploaded/linked sheets stay saved and appear in Print Studio after reload",
+      "name": "print-sources-persist-after-reload",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "/print sources-list contained 'brands — AURA Studio' and 'Sample multi-brand sheet' before and after page.reload(); clicking 'Sample multi-brand sheet' loaded sheets-data-table and showed 'Sheet variables' panel with column-chip-sku."
+    },
+    {
+      "criterion": "Upload CSV in Print Studio adds a source named after the file and selects it, table shows its row",
+      "name": "print-upload-csv-adds-source",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Uploaded /tmp/one.csv via sheet-upload-input on /print; toast '\"one\" imported'; sources-list grew by 1; sheets-data-table visible and contained 'Widget'."
+    },
+    {
+      "criterion": "Uploading /tmp/one.csv creates a source named 'one' with correct row data (API)",
+      "name": "test_tscheck_sheet_upload_csv.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /sheets/upload (one.csv) -> 201, source name 'one'; GET /sources contains it; POST /sheets/fetch returned columns ['item','code'] and rows [{'item':'Widget','code':'123456'}]."
+    },
+    {
+      "criterion": "Invalid upload / private link errors are shown (no data saved)",
+      "name": "print-upload-invalid-shows-error",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Uploading a .json file via sheet-upload-input showed toast 'Upload a .csv or .xlsx file'; pasting the fake Google Sheets URL into google-sheets-input-url and clicking google-sheets-fetch-button showed a toast matching /publicly readable/i; sources-list count unchanged after both attempts."
+    },
+    {
+      "criterion": "Invalid file extension upload is rejected by the API and nothing is persisted",
+      "name": "test_tscheck_sheet_upload_invalid.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /sheets/upload with tscheck-notes.json -> 400 {'detail':'Upload a .csv or .xlsx file'}; GET /sources ids unchanged before/after."
+    },
+    {
+      "criterion": "Fetching an unreachable/private Google Sheet link returns the expected error and saves nothing",
+      "name": "test_tscheck_sheet_fetch_invalid_link.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /sheets/fetch with the fake doc id -> 400, detail contains 'publicly readable'; GET /sources count unchanged before/after."
+    },
+    {
+      "criterion": "Printing works with an uploaded/selected sheet: print-trigger-button calls window.print and .print-root contains .print-page",
+      "name": "print-flow-creates-print-root",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Chose template 'AURA Studio — Apparel Hangtag', selected 'Sample multi-brand sheet', checked 2 rows (selected-count '2 selected'), stubbed window.print, clicked print-trigger-button -> stub invoked (window.__printed > 0); .print-root present with >=1 .print-page."
+    }
+  ]
+}

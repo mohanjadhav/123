@@ -70,3 +70,4 @@ class SheetData(BaseModel):
     columns: List[str]
     rows: List[dict[str, str]]
     csv_url: str
+    name: str = ""

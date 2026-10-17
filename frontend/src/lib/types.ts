@@ -57,6 +57,7 @@ export interface SheetData {
   columns: string[];
   rows: Record<string, string>[];
   csv_url: string;
+  name: string;
 }
 
 export type Row = Record<string, string>;

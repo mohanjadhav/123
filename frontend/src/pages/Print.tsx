@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileSpreadsheet, Plus, Printer, RefreshCw, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Plus, Printer, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { Label as LabelView, Scaled } from "@/components/label/Label";
@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ApiError, apiDelete, apiPost } from "@/lib/api";
+import { apiDelete, apiErrorDetail, apiPost } from "@/lib/api";
+import { SheetImporter, VariableChips } from "@/components/SheetImporter";
 import { autoMapping, fetchSheet, fetchSources, fetchTemplates, MM_TO_PX, placeholdersOf } from "@/lib/label";
 import type { Mapping, Row, SheetSource, SheetSourceCreate, Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -93,7 +94,6 @@ export default function Print() {
   const [templateId, setTemplateId] = useState(params.get("template") ?? "");
   const [sourceId, setSourceId] = useState("");
   const [activeUrl, setActiveUrl] = useState("");
-  const [urlInput, setUrlInput] = useState("");
   const [overrides, setOverrides] = useState<Mapping>({});
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [filterCol, setFilterCol] = useState("");
@@ -111,7 +111,7 @@ export default function Print() {
   const sheet = useQuery({ queryKey: ["sheet", activeUrl], queryFn: () => fetchSheet(activeUrl), enabled: !!activeUrl, retry: false });
   const columns = sheet.isError ? [] : (sheet.data?.columns ?? []);
   const rows = useMemo(() => (sheet.isError ? [] : (sheet.data?.rows ?? [])), [sheet.data, sheet.isError]);
-  const sheetError = sheet.error instanceof ApiError ? (sheet.error.body as { detail?: string } | null)?.detail : null;
+  const sheetError = sheet.isError ? apiErrorDetail(sheet.error, "Could not load sheet.") : null;
 
   const placeholders = useMemo(() => (template ? placeholdersOf(template) : []), [template]);
   const mapping = useMemo(() => ({ ...autoMapping(placeholders, columns), ...overrides }), [placeholders, columns, overrides]);
@@ -146,14 +146,7 @@ export default function Print() {
   const chooseSource = (s: SheetSource) => {
     setSourceId(s.id);
     setActiveUrl(s.url);
-    setUrlInput(s.url === "sample" ? "" : s.url);
     if (s.template_id && templates.data?.some((t) => t.id === s.template_id)) setTemplateId(s.template_id);
-    resetData();
-  };
-  const loadUrl = () => {
-    if (!urlInput.trim()) return toast.error("Paste a Google Sheets or CSV URL");
-    setSourceId("");
-    setActiveUrl(urlInput.trim());
     resetData();
   };
 
@@ -214,7 +207,7 @@ export default function Print() {
             title="1 · Google Sheets"
             action={
               <Button size="xs" variant="ghost" data-testid="add-source-button"
-                onClick={() => { setForm({ name: "", brand: "", url: urlInput, template_id: templateId || null }); setDialogOpen(true); }}>
+                onClick={() => { setForm({ name: "", brand: "", url: "", template_id: templateId || null }); setDialogOpen(true); }}>
                 <Plus /> Save sheet
               </Button>
             }
@@ -238,13 +231,9 @@ export default function Print() {
                 </li>
               ))}
             </ul>
-            <div className="flex gap-1.5">
-              <Input data-testid="google-sheets-input-url" value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="Paste public Google Sheet URL" className="h-9 text-xs" onKeyDown={(e) => e.key === "Enter" && loadUrl()} />
-              <Button size="icon" variant="outline" data-testid="google-sheets-fetch-button" onClick={loadUrl} title="Load"><Download /></Button>
-            </div>
+            <SheetImporter sources={sources.data ?? []} templateId={templateId || null} onImported={(created) => chooseSource(created[0])} />
             <p className="mt-2 text-[11px] leading-relaxed text-neutral-500">
-              Sheet must be shared as “Anyone with the link can view”. Each brand tab has its own link — open the tab, copy the URL (it includes <span className="font-mono">gid=</span>) and save it.
+              Links must be shared as “Anyone with the link can view”. Each brand tab has its own link (it includes <span className="font-mono">gid=</span>). Uploaded Excel files become one saved sheet per tab.
             </p>
             {sheet.isFetching && <p className="mt-2 text-xs text-neutral-400">Loading sheet…</p>}
             {sheet.isError && <p className="mt-2 text-xs text-red-400" data-testid="sheet-error">{sheetError ?? "Could not load sheet."}</p>}
@@ -255,6 +244,13 @@ export default function Print() {
               </div>
             )}
           </Panel>
+
+          {columns.length > 0 && (
+            <Panel title="Sheet variables">
+              <p className="mb-2 text-[11px] text-neutral-500">Column headers of <span className="text-white">{sheet.data?.name || "this sheet"}</span>. Click to copy, then paste into any label element — or add them in the editor.</p>
+              <VariableChips columns={columns} onPick={(c) => { navigator.clipboard?.writeText(`{{${c}}}`); toast.success(`Copied {{${c}}}`); }} />
+            </Panel>
+          )}
 
           <Panel title="2 · Template">
             <Select value={templateId} onValueChange={(v: string) => { setTemplateId(v); setOverrides({}); }}>

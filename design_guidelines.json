@@ -1,0 +1,213 @@
+{
+  "project_name": "BARCODR / Studio Label Architect",
+  "archetype": "ARCHETYPE 4: Swiss Precision Industrial meets Analog Print Studio (Tactical Dark Slate Canvas + Warm Cream Thermal Paper)",
+  "design_direction": {
+    "emotional_tone": "Utilitarian authority, surgical barcode precision, high-efficiency print production flow with tactile craft feel",
+    "vibe": "A specialized barcode mastering suite used in modern fulfillment centers and boutique industrial brands. Crisp technical rules, high-legibility measurements, zero generic SaaS fluff.",
+    "theme": "Dark workspace (#0F1115 slate charcoal) with physical warm-white/cream paper canvas (#FBFBFA) and amber-orange production accent (#FF5722 / #E64A19)"
+  },
+  "fonts": {
+    "heading": "IBM Plex Sans, Outfit, sans-serif",
+    "body": "Geist Variable, Inter, sans-serif",
+    "mono_technical": "IBM Plex Mono, JetBrains Mono, monospace",
+    "label_display_options": ["IBM Plex Sans", "IBM Plex Mono", "Geist Variable", "Lora", "Playfair Display", "DM Sans"]
+  },
+  "color_palette": {
+    "canvas_background": "#0F1115",
+    "sidebar_panel": "#16191F",
+    "inspector_panel": "#1A1E24",
+    "card_dark": "#1F242C",
+    "border_subtle": "#2A303C",
+    "border_strong": "#3F4858",
+    "accent_primary": "#FF5B26",
+    "accent_primary_hover": "#FF7143",
+    "accent_focus_ring": "#FF5B26",
+    "print_paper_surface": "#FDFDFC",
+    "print_paper_border": "#D8D8D4",
+    "print_grid_lines": "rgba(0, 0, 0, 0.07)",
+    "ink_black": "#0F0F10",
+    "ink_muted": "#555A64",
+    "success_badge": "#10B981",
+    "warning_badge": "#F59E0B",
+    "cyan_guide": "#06B6D4"
+  },
+  "layout_architecture": {
+    "header": {
+      "type": "Precision Production Bar",
+      "height": "h-14",
+      "style": "bg-[#16191F]/95 backdrop-blur-md border-b border-[#2A303C] px-4 flex items-center justify-between",
+      "components": [
+        "Brand mark 'BARCODR / PRINT-STUDIO' with active status pill",
+        "Brand/Template switcher (Brand dropdown + Template dropdown + 'New Template')",
+        "Google Sheets Sync Status indicator with live row counter",
+        "Fast Actions: [Undo/Redo], [Canvas Zoom 50%-200%], [Sheet Preview / Batch Print Modal CTA]"
+      ]
+    },
+    "workspace_quadrants": {
+      "left_dock": {
+        "width": "w-72 md:w-80",
+        "title": "Assets & Variables Dock",
+        "tabs": ["Add Elements", "Google Sheets Data", "Saved Templates & Brands"],
+        "add_elements_panel": [
+          "1D Barcode (Code 128, EAN-13, UPC-A, Code 39)",
+          "2D Matrix (QR Code, DataMatrix)",
+          "Dynamic Text (Single Line, Auto-wrap Paragraph, Price tag, SKU label)",
+          "Shapes & Dividers (Solid rule, dashed cutline, rounded frame, badge pill)",
+          "Brand Imagery (Logo upload, custom URL, product thumbnail)"
+        ],
+        "sheets_sync_panel": [
+          "Google Sheet Shareable URL input or Quick CSV paste",
+          "Public Google Sheet CSV Export parser",
+          "Sheet tab selection (for multi-sheet workbooks with multiple brands)",
+          "Column Field Chips (e.g. {{sku}}, {{brand_name}}, {{barcode_value}}, {{product_title}}, {{price}}, {{batch_no}}, {{qr_url}})",
+          "Draggable or click-to-bind chips into currently selected element"
+        ]
+      },
+      "center_canvas": {
+        "title": "Interactive Print Bed / Stage",
+        "features": [
+          "True-to-Scale Label Bed in mm and inches (e.g., 4x6 inch thermal, 3x2 inch retail, 2x1 inch shelf tag, 100x50mm EU standard, custom size)",
+          "Subtle millimetric ruler guides along top and left",
+          "Visual Snap-to-center and snap-to-edge guideline highlights (Cyan #06B6D4)",
+          "Interactive bounding box for drag/drop, resize handles, rotation, and multi-selection",
+          "Live Mustache interpolation preview (toggle between 'Raw {{tags}}' and 'Row #1 Live Data')",
+          "Thermal or color paper simulation toggle (Direct Thermal monochrome vs White Gloss with brand color)"
+        ]
+      },
+      "right_inspector": {
+        "width": "w-72 md:w-80",
+        "title": "Element Property Inspector",
+        "sections": [
+          "Physical Coordinates: X, Y, W, H (in mm or px)",
+          "Data Binding: Static text vs Bound Google Sheet Column",
+          "Barcode Symbology Settings: Code 128, EAN-13, QR Code (Error correction level L/M/Q/H)",
+          "Typography: Font family, font weight, size in pt, alignment, uppercase transform",
+          "Appearance: Border stroke, corner radius, rotation (0, 90, 180, 270 deg), fill color, text color",
+          "Layer Order: Send Backward / Bring to Front / Lock Element / Delete"
+        ]
+      },
+      "bottom_production_strip": {
+        "height": "h-12",
+        "style": "bg-[#16191F] border-t border-[#2A303C] px-4 flex items-center justify-between text-xs text-muted-foreground",
+        "elements": [
+          "Current Label Dimension info (e.g., '101.6 x 152.4 mm · 300 DPI preview')",
+          "Zoom presets: [Fit] [100%] [150%] [200%]",
+          "Selected Row Scroller: '< Row 1 of 128 >' with active brand indicator",
+          "Batch Status: '24 rows selected ready for sheet layout'"
+        ]
+      }
+    }
+  },
+  "batch_print_modal": {
+    "title": "Batch Print Studio & Imposition Engine",
+    "capabilities": [
+      "Target Sheet Type: Continuous Roll (1 label/page for Zebra/Rollo thermal printers) vs Multi-up Sheet (A4 or US Letter 2x4, 3x8, 4x10 grid for Avery/standard desktop printers)",
+      "Label spacing: Horizontal & Vertical margins, gap between labels",
+      "Row selection table with filters, brand search, and 'Select All' / 'Select Range'",
+      "High-fidelity Print Preview matching browser @media print CSS output",
+      "Instant 'Browser Print' trigger with zero header/footer margin overrides and CSS page-break rules"
+    ]
+  },
+  "image_urls": {
+    "box_with_qr_and_barcode": "https://images.pexels.com/photos/7843978/pexels-photo-7843978.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "shipping_label_on_box": "https://images.pexels.com/photos/4440788/pexels-photo-4440788.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "thermal_printer_station": "https://images.unsplash.com/photo-1781899710894-f9ecfea088f3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwyfHxzaGlwcGluZyUyMGxhYmVsJTIwdGhlcm1hbCUyMHByaW50ZXJ8ZW58MHx8fHwxNzkyMjI5NjAzfDA&ixlib=rb-4.1.0&q=85",
+    "mobile_scanning_package": "https://images.pexels.com/photos/7289717/pexels-photo-7289717.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+  },
+  "default_sample_templates": [
+    {
+      "id": "tpl-apparel-01",
+      "name": "Luxury Apparel Hangtag",
+      "brand": "AURA Studio",
+      "width_mm": 50,
+      "height_mm": 90,
+      "paper_type": "white",
+      "elements_summary": "Minimalist serif logo, dynamic price, size badge, Code 128 barcode, wash instruction icon"
+    },
+    {
+      "id": "tpl-shipping-02",
+      "name": "Thermal 4x6 Logistics Label",
+      "brand": "Apex Freight Logistics",
+      "width_mm": 101.6,
+      "height_mm": 152.4,
+      "paper_type": "thermal",
+      "elements_summary": "Large routing code, carrier service badge, bold customer address block, Code 128 shipping tracking barcode, package QR code"
+    },
+    {
+      "id": "tpl-gourmet-03",
+      "name": "Artisanal Coffee & Roasters Jar Label",
+      "brand": "Nordic Hearth Roastery",
+      "width_mm": 70,
+      "height_mm": 50,
+      "paper_type": "kraft_cream",
+      "elements_summary": "Origin roast header, tasting notes, harvest date, roast level indicator, QR code linking to brew guide"
+    },
+    {
+      "id": "tpl-warehouse-04",
+      "name": "Inventory Bin & Shelf Tag",
+      "brand": "OmniParts Depot",
+      "width_mm": 76.2,
+      "height_mm": 25.4,
+      "paper_type": "thermal",
+      "elements_summary": "High-contrast massive SKU code, aisle/bin coordinates, compact high-density Code 39 barcode"
+    }
+  ],
+  "sample_google_sheets_dataset": {
+    "default_brands": ["AURA Studio", "Apex Freight Logistics", "Nordic Hearth Roastery", "OmniParts Depot"],
+    "columns": ["brand_name", "sku", "product_title", "barcode_value", "price", "category", "batch_no", "destination_hub", "qr_url"],
+    "rows_count": 12
+  },
+  "interactive_rules": {
+    "drag_and_drop": "Support direct dragging on canvas, multi-step snapping guides, arrow key nudging (1px or 10px with Shift)",
+    "data_binding": "Selecting an element allows clicking a sheet column tag (e.g. {{sku}}) to insert into text or barcode value",
+    "print_sheet_modes": [
+      "Roll Printer (1 per page continuous)",
+      "A4 Grid (2x4 labels - 8 per page)",
+      "US Letter Grid (3x10 address labels - 30 per page)",
+      "Custom Sheet Grid (columns, rows, margins, spacing in mm)"
+    ]
+  },
+  "testing_attributes": {
+    "rule": "Every button, input, tab, template selector, canvas element, and print trigger must have kebab-case data-testid attributes",
+    "required_test_ids": [
+      "app-header",
+      "brand-select",
+      "template-select",
+      "new-template-button",
+      "save-template-button",
+      "google-sheets-input-url",
+      "google-sheets-fetch-button",
+      "use-sample-sheets-button",
+      "sheets-brand-filter",
+      "sheets-data-table",
+      "canvas-editor-container",
+      "canvas-label-stage",
+      "add-barcode-button",
+      "add-qrcode-button",
+      "add-text-button",
+      "add-shape-button",
+      "add-image-button",
+      "prop-inspector-panel",
+      "prop-width-input",
+      "prop-height-input",
+      "prop-binding-select",
+      "prop-barcode-format",
+      "prop-font-select",
+      "preview-toggle-raw-vs-data",
+      "row-nav-previous",
+      "row-nav-next",
+      "open-print-modal-button",
+      "print-modal-container",
+      "print-sheet-layout-select",
+      "print-trigger-button",
+      "print-preview-container"
+    ]
+  },
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": {
+    "clean_code": "Use clean modern React 19 code in .tsx or .jsx according to existing project structure. The project already has TypeScript configured with tsconfig.app.json and components in src/components/ui.",
+    "barcode_rendering": "Implement pure SVG barcode generators (Code 128 / EAN / Code 39) and SVG QR code matrix generator or lightweight client-side generators so barcodes look razor-sharp at 300 DPI print output without blurry raster pixelation.",
+    "print_styling": "Add a dedicated print-optimized CSS section or @media print styling so when window.print() is called, only the print stage / sheets are rendered with exact physical dimensions and zero background clipping.",
+    "state_persistence": "Store templates and custom sheet datasets in localStorage so refreshed pages preserve custom user label designs, multiple brands, and customized layouts.",
+    "visual_feel": "Use high-contrast industrial dark canvas (#0F1115) with genuine cream paper sheets (#FDFDFC) with realistic drop shadows to deliver that high-end print production feeling."
+  }
+}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { ChevronDown, ChevronUp, Eye, FileSpreadsheet, Import, Printer, RefreshCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,14 +9,35 @@ import type { Row, SheetSource } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const NONE = "__none__";
-const MIN_W = 60;
-const MAX_AUTO_W = 280;
+const MIN_W = 56;
 
-/** Content-based width: header vs. longest of the first 50 values. */
-function autoWidth(col: string, rows: Row[]): number {
-  const longest = rows.slice(0, 50).reduce((m, r) => Math.max(m, (r[col] ?? "").length), 0);
-  const header = col.length * 8.5 + 30; // headers are bold and often UPPERCASE
-  return Math.max(MIN_W, Math.min(MAX_AUTO_W, Math.round(Math.max(header, longest * 7 + 24))));
+const MAX_AUTO_W = 360;
+let measureCtx: CanvasRenderingContext2D | null = null;
+
+/** Real rendered width of the header + every value in the column (grid font), so columns size to their content. */
+function measureWidths(columns: string[], rows: Row[]): Record<string, number> {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  const ctx = measureCtx;
+  const out: Record<string, number> = {};
+  for (const c of columns) {
+    let w: number;
+    if (!ctx) {
+      w = Math.max(c.length * 8.5, ...rows.slice(0, 500).map((r) => (r[c] ?? "").length * 7));
+    } else {
+      ctx.font = "600 12px 'IBM Plex Sans', sans-serif";
+      w = ctx.measureText(c).width + 8; // room for resize grip
+      ctx.font = "400 12px 'IBM Plex Sans', sans-serif";
+      const seen = new Set<string>();
+      for (const r of rows.slice(0, 5000)) {
+        const v = r[c] ?? "";
+        if (!v || seen.has(v)) continue;
+        seen.add(v);
+        w = Math.max(w, ctx.measureText(v).width);
+      }
+    }
+    out[c] = Math.max(MIN_W, Math.min(MAX_AUTO_W, Math.ceil(w + 18))); // + cell padding & border
+  }
+  return out;
 }
 
 export interface GridSelection {
@@ -48,7 +69,8 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
 }) {
   const [q, setQ] = useState("");
   const [widths, setWidths] = useState<Record<string, number>>({});
-  const widthOf = (c: string) => widths[c] ?? autoWidth(c, rows);
+  const auto = useMemo(() => measureWidths(columns, rows), [columns, rows]); // recalculates on refresh / new sheet
+  const widthOf = (c: string) => widths[c] ?? auto[c] ?? 120;
   const startResize = (e: ReactPointerEvent<HTMLSpanElement>, col: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -133,11 +155,11 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
               </div>
             </div>
           ) : (
-            <table className="table-fixed border-collapse text-xs" style={{ width: 40 + 40 + 80 + 40 + columns.reduce((n, c) => n + widthOf(c), 0) }} data-testid="sheets-data-table">
+            <table className="table-fixed border-collapse text-xs" style={{ width: 40 + 40 + 64 + 40 + columns.reduce((n, c) => n + widthOf(c), 0), minWidth: "100%" }} data-testid="sheets-data-table">
               <colgroup>
                 <col style={{ width: 40 }} />
                 <col style={{ width: 40 }} />
-                <col style={{ width: 80 }} />
+                <col style={{ width: 64 }} />
                 {columns.map((c) => <col key={c} style={{ width: widthOf(c) }} />)}
                 <col style={{ width: 40 }} />
               </colgroup>

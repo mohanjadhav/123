@@ -103,14 +103,14 @@ export function Canvas({ tpl, row, mapping, zoom, onZoom, fitZoom, selectedId, o
                       key={el.id}
                       data-testid={`canvas-element-${el.id}`}
                       style={elementBoxStyle(el)}
-                      className={cn("cursor-move touch-none select-none", el.id === selectedId ? "outline outline-[1.5px] outline-[#1A73E8]" : "hover:outline hover:outline-1 hover:outline-dashed hover:outline-[#1A73E8]/60")}
+                      className={cn("cursor-move touch-none select-none", el.id === selectedId ? "outline outline-[1.5px] outline-(--app-accent)" : "hover:outline hover:outline-1 hover:outline-dashed hover:outline-(--app-accent)/60")}
                       onPointerDown={(e) => down(e, el, "move")}
                       onPointerMove={move}
                       onPointerUp={up}
                     >
                       {body}
                       {el.id === selectedId && (
-                        <div data-testid="resize-handle" className="absolute -bottom-1 -right-1 size-2.5 cursor-se-resize rounded-[1px] border border-white bg-[#1A73E8]"
+                        <div data-testid="resize-handle" className="absolute -bottom-1 -right-1 size-2.5 cursor-se-resize rounded-[1px] border border-white bg-(--app-accent)"
                           onPointerDown={(e) => down(e, el, "resize")} onPointerMove={move} onPointerUp={up} />
                       )}
                     </div>

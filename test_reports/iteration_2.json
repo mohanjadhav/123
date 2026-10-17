@@ -1,0 +1,101 @@
+{
+  "iteration": 2,
+  "mode": "generate",
+  "summary": "App changed substantially since iteration_1 (now 'EASY LABELS by HC' designer at '/' + Sheet Data page at '/data/:sourceId', matching the new briefing's 7-criterion matrix). Wrote 8 new browser checks + 1 new backend test file covering all 7 criteria; reused/fixed 2 pre-existing browser checks (page-setup-dialog-has-all-controls, page-setup-saves-and-persists) that still matched the new app's testids. All 9 artifacts pass. Recreated missing /tmp/one.csv and /tmp/brands.xlsx fixtures (briefing said they existed but /tmp was empty this session) so pre-existing backend upload tests could run.",
+  "passed": 9,
+  "failed": 0,
+  "flaky": 2,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": false,
+  "bugs": [],
+  "action_items": [
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "Two checks (print-pdf-only-labels, page-setup-saves-and-persists) failed once with a timeout on a dialog-opening click using {force:true} and passed cleanly on a normal (non-forced) click retry - classified as flaky/script-robustness, not an app bug, since the dialogs did open and worked correctly via a plain click. Scripts were adjusted to drop force:true on dialog-trigger clicks."
+    },
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "/tmp/one.csv and /tmp/brands.xlsx referenced by seed_facts and by pre-existing backend tests were missing at session start (ephemeral /tmp); recreated them with the exact schemas the tests expect (item/code for one.csv; SKU/Product Name/Barcode/Price for AURA Studio tab, Part No/Desc/Code for OmniParts tab in brands.xlsx)."
+    },
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "Full backend suite run with default pytest-xdist parallelism produced one spurious failure in a pre-existing test (test_tscheck_sheet_fetch_invalid_link.py) due to a source-count race against concurrently-running upload tests in other workers; passed cleanly when run with -n0 (sequential). Not a regression in this session's work - pre-existing test's isolation assumption (global source count) conflicts with xdist, flagged here for awareness only."
+    }
+  ],
+  "checks": [
+    {
+      "criterion": "User bug: printed pages had lots of blank space/extra content around labels - PDF should contain only label text at the computed page size",
+      "name": "print-pdf-only-labels",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "On tpl-omni-bin (76x25mm roll), stubbed window.print to throw; from the open Preview dialog and from toolbar Print directly, .print-root mounted with 1 node each time; page.pdf({preferCSSPageSize:true}) produced non-trivial PDFs (33990 bytes); print-root innerText contained only label field values (AUR-TS-001, Linen Overshirt — Sand, B24-07, ...) with @page size 76mm 25mm margin 0, and did NOT match /Print preview|Page setup|EASY LABELS/i."
+    },
+    {
+      "criterion": "Page setup per label: dialog exposes paper/orientation/cols-rows/gaps/margins/order/start/offsets with live diagram + summary",
+      "name": "page-setup-dialog-has-all-controls",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "On tpl-omni-bin, opened page-setup-dialog; selected A4 paper; verified cols, gap-x, order-across/down, margin-top/right/bottom/left, offset-x/y, page-setup-diagram all visible; summary read '2 x 10 = 20 labels per page · page 210 x 297 mm · label 76 x 25 mm'; custom paper option also present in the paper dropdown."
+    },
+    {
+      "criterion": "Page setup 'Save page setup' persists to the template (GET /api/templates/{id} page_setup) and survives reload; preview summary reflects it",
+      "name": "page-setup-saves-and-persists",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Set paper=A4, start-position=3 on tpl-omni-bin, clicked page-setup-save, saw 'page setup saved' toast; after page.reload() reopened the dialog and paper-select still showed A4 and start value '3'; Preview dialog's print-summary-paper read 'A4 sheet'. Reset template's page_setup back to defaults (paper label, start 1) via API afterward per cleanup instructions."
+    },
+    {
+      "criterion": "Brand tabs of one Google spreadsheet are switchable (data-sheet-tabs on Sheet Data page, grid-sheet-tabs in designer), sync-tabs idempotent",
+      "name": "sheet-tabs-switch-brand",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "On /data/586de90c... (CORRADO V2) data-sheet-tabs showed Sheet1 | Copy of Sheet1 | DATA; clicking the DATA tab navigated the URL to e1984475-...; opening the 'SAMPLE NMM' label (linked to CORRADO Sheet1) showed grid-sheet-tabs with the same 3 tabs in the bottom grid. Read-only per seed_facts (no tab click inside the designer grid, to avoid relinking SAMPLE NMM)."
+    },
+    {
+      "criterion": "POST /api/sources/{id}/sync-tabs is idempotent (no duplicate sources)",
+      "name": "test_tscheck_sync_tabs_idempotent.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /sources/586de90c.../sync-tabs twice in a row -> 200 both times, identical ordered id lists; GET /sources before/after had identical id sets and CORRADO tab count unchanged (3)."
+    },
+    {
+      "criterion": "Sheet Data page: cell editing, add/duplicate/delete rows, qty/tick, Preview, edits persist and are shared with designer grid",
+      "name": "sheet-data-page-edit-flow",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "On /data/src-sample (via tpl-omni-bin's Sheet data button): added a row (9->10 rows per sheet-data-stats), edited its brand_name cell to 'tscheck-brand', set qty=3, duplicated the row (->11 rows), opened Preview (print-summary-paper visible), reloaded and confirmed 11 rows persisted with the edited cell intact. Cleaned up afterward via POST /sheets/copy/src-sample/refresh {mode:'replace'}, confirmed back to 9 rows."
+    },
+    {
+      "criterion": "Colour theme selection changes html[data-theme] + accents, persists across reload and both pages",
+      "name": "theme-picker-persists",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Default theme 'blue'; selecting theme-option-emerald set html[data-theme]='emerald' and --app-accent to #0F9D58; survived page.reload() and navigating to /data/src-sample; reset back to theme-option-blue afterward (data-theme='blue') for cleanup."
+    },
+    {
+      "criterion": "App renamed: title + headers say 'EASY LABELS by HC', no leftover 'BARCODR' text",
+      "name": "app-renamed-easy-labels",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "document.title = 'EASY LABELS by HC — Barcode Label Designer & Google Sheets Printing'; app-header on designer reads 'EASY LABELS by HC'; sheet-data-header on /data/src-sample reads 'EASY LABELS by HC · Sheet data'; body text on both pages contained no 'BARCODR' match."
+    },
+    {
+      "criterion": "Excel upload with multiple tabs groups as tabs sharing a workbook; tab bar shows both and switching works",
+      "name": "excel-upload-multi-tab-groups",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "On tpl-nordic-jar, opened Import dialog, uploaded /tmp/brands.xlsx via sheet-upload-input; toast confirmed import; grid-sheet-tabs showed 'brands / AURA Studio / OmniParts'; clicking grid-sheet-tabs-tab-1 switched and sheets-data-table remained visible. Cleaned up afterward: reset tpl-nordic-jar.source_id to null and deleted the 2 created 'brands' sources via API."
+    },
+    {
+      "criterion": "Uploading /tmp/brands.xlsx creates 2 saved sources with correct per-tab columns (API, pre-existing test re-validated against current app)",
+      "name": "test_tscheck_sheet_upload_xlsx.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /sheets/upload (brands.xlsx) -> 201, 2 sources 'brands — AURA Studio' / 'brands — OmniParts'; both in GET /sources; POST /sheets/fetch for each returned the expected columns (SKU/Product Name/Barcode/Price and Part No/Desc/Code respectively)."
+    }
+  ]
+}

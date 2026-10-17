@@ -29,12 +29,14 @@ export function SheetImporter({ sources, onImported }: {
         url: link,
         template_id: null,
       });
-      return [src];
+      // Pick up every brand tab of the spreadsheet as its own saved sheet.
+      const tabs = await apiPost<SheetSource[]>(`/sources/${src.id}/sync-tabs`).catch(() => [src]);
+      return [tabs.find((t) => t.id === src.id) ?? src, ...tabs.filter((t) => t.id !== src.id)];
     },
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["sources"] });
       setUrl("");
-      toast.success(`Sheet "${created[0].name}" connected`);
+      toast.success(created.length > 1 ? `Connected — ${created.length} tabs found` : `Sheet "${created[0].name}" connected`);
       onImported(created);
     },
     onError: (err) => toast.error(apiErrorDetail(err, "Could not load that sheet")),
@@ -70,7 +72,7 @@ export function SheetImporter({ sources, onImported }: {
           <Input data-testid="google-sheets-input-url" value={url} onChange={(e) => setUrl(e.target.value)}
             placeholder="https://docs.google.com/spreadsheets/d/…" className="h-9 bg-white text-xs"
             onKeyDown={(e) => e.key === "Enter" && submit()} />
-          <Button data-testid="google-sheets-fetch-button" onClick={submit} disabled={busy} className="h-9 bg-[#1A73E8] text-white hover:bg-[#1765CC]">
+          <Button data-testid="google-sheets-fetch-button" onClick={submit} disabled={busy} className="h-9 bg-(--app-accent) text-white hover:bg-(--app-accent-hover)">
             <Link2 /> {loadLink.isPending ? "Connecting…" : "Connect"}
           </Button>
         </div>

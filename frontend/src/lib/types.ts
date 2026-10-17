@@ -29,6 +29,28 @@ export interface LabelElement {
   rotation: number;
 }
 
+export interface PageSetup {
+  paper: "label" | "a4" | "letter" | "custom";
+  paper_w: number;
+  paper_h: number;
+  orientation: "portrait" | "landscape";
+  cols: number; // 0 = auto
+  rows: number; // 0 = auto
+  gap_x: number;
+  gap_y: number;
+  margin_top: number;
+  margin_right: number;
+  margin_bottom: number;
+  margin_left: number;
+  offset_x: number;
+  offset_y: number;
+  order: "across" | "down";
+  start_position: number;
+}
+
+/** What the label renderer needs. */
+export type LabelShape = Pick<TemplateBase, "width_mm" | "height_mm" | "background" | "elements">;
+
 export interface TemplateBase {
   name: string;
   brand: string;
@@ -37,6 +59,7 @@ export interface TemplateBase {
   background: string;
   elements: LabelElement[];
   source_id: string | null;
+  page_setup: PageSetup;
 }
 
 export interface Template extends TemplateBase {
@@ -54,6 +77,10 @@ export interface SheetSourceCreate {
 
 export interface SheetSource extends SheetSourceCreate {
   id: string;
+  workbook: string | null; // groups tabs of one spreadsheet / file
+  workbook_name: string | null;
+  tab: string | null;
+  tab_index: number;
   created_at: string;
 }
 
@@ -79,6 +106,7 @@ export interface CopyRow {
 export interface SheetCopyUpdate {
   columns: string[];
   rows: CopyRow[];
+  qty_column: string | null; // read print quantity from this column (null = manual qty)
 }
 
 export interface SheetCopy extends SheetCopyUpdate {

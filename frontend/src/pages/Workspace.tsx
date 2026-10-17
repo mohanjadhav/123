@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Barcode, Copy, Eye, FilePlus2, FolderOpen, Printer, Redo2, Save, SlidersHorizontal, Undo2, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Barcode, Copy, Table2, Eye, FilePlus2, FolderOpen, Printer, Redo2, Save, Settings2, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { SheetImporter } from "@/components/SheetImporter";
+import { ThemePicker } from "@/components/ThemePicker";
 import { Canvas } from "@/components/workspace/Canvas";
 import { DataGrid } from "@/components/workspace/DataGrid";
 import { Inspector } from "@/components/workspace/Inspector";
@@ -14,7 +16,8 @@ import type { Tool } from "@/components/workspace/LeftPanel";
 import { PrintPortal, PrintPreviewDialog } from "@/components/workspace/PrintPreview";
 import { RefreshDialog } from "@/components/workspace/RefreshDialog";
 import { useSheetCopy } from "@/lib/useSheetCopy";
-import type { PrintLayout } from "@/components/workspace/PrintPreview";
+import { expandRows, rowQty } from "@/lib/grid";
+import { PageSetupDialog } from "@/components/workspace/PageSetupDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiDelete, apiErrorDetail, apiPost, apiPut } from "@/lib/api";
 import { autoMapping, fetchSources, fetchTemplates, MM_TO_PX, newElement, placeholdersOf } from "@/lib/label";
@@ -39,14 +42,14 @@ const load = <T,>(key: string, fallback: T): T => {
 const round = (n: number) => Math.round(n * 2) / 2;
 const fitZoomFor = (t: TemplateBase) => Math.max(0.3, Math.min(5, Math.min(560 / (t.width_mm * MM_TO_PX), 300 / (t.height_mm * MM_TO_PX))));
 const toBase = (t: Template): TemplateBase => ({
-  name: t.name, brand: t.brand, width_mm: t.width_mm, height_mm: t.height_mm, background: t.background, elements: t.elements, source_id: t.source_id,
+  name: t.name, brand: t.brand, width_mm: t.width_mm, height_mm: t.height_mm, background: t.background, elements: t.elements, source_id: t.source_id, page_setup: t.page_setup,
 });
 
 function ToolButton({ icon, label, onClick, disabled, testId, primary }: { icon: ReactNode; label: string; onClick: () => void; disabled?: boolean; testId: string; primary?: boolean }) {
   return (
     <button data-testid={testId} onClick={onClick} disabled={disabled}
       className={cn("flex h-8 items-center gap-1.5 rounded px-2.5 text-[13px] transition-colors duration-150 disabled:opacity-40 [&_svg]:size-4",
-        primary ? "text-[#1A73E8] hover:bg-[#E8F0FE]" : "text-[#1F2937] hover:bg-[#EEF0F3]")}>
+        primary ? "text-(--app-accent) hover:bg-(--app-accent-soft)" : "text-[#1F2937] hover:bg-[#EEF0F3]")}>
       {icon}
       <span className="hidden lg:inline">{label}</span>
     </button>
@@ -55,6 +58,7 @@ function ToolButton({ icon, label, onClick, disabled, testId, primary }: { icon:
 
 export default function Workspace() {
   const qc = useQueryClient();
+  const nav = useNavigate();
   const templatesQ = useQuery({ queryKey: ["templates"], queryFn: fetchTemplates });
   const sourcesQ = useQuery({ queryKey: ["sources"], queryFn: fetchSources });
   const templates = useMemo(() => (templatesQ.isError ? [] : (templatesQ.data ?? [])), [templatesQ.data, templatesQ.isError]);
@@ -65,9 +69,8 @@ export default function Workspace() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [zooms, setZooms] = useState<Record<string, number>>({});
-  const [layout, setLayout] = useState<PrintLayout>(() => load("bc.layout", { mode: "roll", margin: 8, gap: 3 }));
   const [printJob, setPrintJob] = useState<{ rows: Row[]; single: boolean } | null>(null);
-  const [dialog, setDialog] = useState<null | "new" | "open" | "import" | "preview" | "refresh">(null);
+  const [dialog, setDialog] = useState<null | "new" | "open" | "import" | "preview" | "refresh" | "pagesetup">(null);
   const [gridCollapsed, setGridCollapsed] = useState(false);
 
   // Tabs: only templates that still exist; default to the newest template.
@@ -77,7 +80,6 @@ export default function Workspace() {
   }, [openIds, templates]);
   const currentId = tabIds.includes(activeId) ? activeId : (tabIds[0] ?? "");
   useEffect(() => { localStorage.setItem("bc.openTabs", JSON.stringify(tabIds)); localStorage.setItem("bc.activeTab", JSON.stringify(currentId)); }, [tabIds, currentId]);
-  useEffect(() => { localStorage.setItem("bc.layout", JSON.stringify(layout)); }, [layout]);
 
   const draftOf = useCallback((id: string, d: Record<string, Draft>): Draft | undefined => {
     if (d[id]) return d[id];
@@ -175,15 +177,17 @@ export default function Workspace() {
 
   // ---- print data: the label remembers its sheet (saved immediately)
   const source = sources.find((s) => s.id === tpl?.source_id) ?? null;
-  const linkSource = (id: string | null) => {
+  /** Settings that save instantly (linked sheet, page setup) without touching unsaved design edits. */
+  const persist = (patch: Partial<TemplateBase>, errorMsg: string) => {
     if (!tpl) return;
     setDrafts((d) => {
       const cur = draftOf(tpl.id, d);
-      return cur ? { ...d, [tpl.id]: { ...cur, tpl: { ...cur.tpl, source_id: id } } } : d;
+      return cur ? { ...d, [tpl.id]: { ...cur, tpl: { ...cur.tpl, ...patch } } } : d;
     });
     const server = templates.find((t) => t.id === tpl.id);
-    if (server) putTemplate(server.id, { ...toBase(server), source_id: id }).then(syncSaved).catch(() => toast.error("Could not link sheet"));
+    if (server) putTemplate(server.id, { ...toBase(server), ...patch }).then(syncSaved).catch(() => toast.error(errorMsg));
   };
+  const linkSource = (id: string | null) => persist({ source_id: id }, "Could not link sheet");
   const onImported = (created: SheetSource[]) => { linkSource(created[0].id); setDialog(null); setGridCollapsed(false); };
 
   // Print data = the app's editable copy of the sheet (shared with the Sheet Data page; never written to Google).
@@ -196,8 +200,9 @@ export default function Workspace() {
   const placeholders = useMemo(() => (tpl ? placeholdersOf(tpl) : []), [tpl]);
   const mapping = useMemo(() => autoMapping(placeholders, columns), [placeholders, columns]);
   const missing = columns.length ? placeholders.filter((p) => !mapping[p]) : [];
-  const printRows = copyRows.flatMap((r) => (r.selected ? Array.from({ length: r.qty }, () => r.cells) : []));
-  const previewRow = copyRows.find((r) => r.selected)?.cells ?? rows[0] ?? null;
+  const qtyColumn = copy?.qty_column ?? null;
+  const printRows = expandRows(copyRows, qtyColumn);
+  const previewRow = copyRows.find((r) => r.selected && rowQty(r, qtyColumn) > 0)?.cells ?? rows[0] ?? null;
 
   const runPrint = (list: Row[], single = false) => {
     if (!tpl) return;
@@ -253,8 +258,8 @@ export default function Workspace() {
       {/* Toolbar */}
       <header className="flex h-12 shrink-0 items-center gap-1 border-b border-[#D9DDE3] bg-white px-2" data-testid="app-header">
         <div className="mr-2 flex items-center gap-2 pl-1 pr-3">
-          <span className="grid size-7 place-items-center rounded-md bg-[#1A73E8] text-white"><Barcode className="size-4" /></span>
-          <span className="hidden text-sm font-semibold tracking-tight md:inline">BARCODR <span className="font-normal text-[#6B7280]">Studio</span></span>
+          <span className="grid size-7 place-items-center rounded-md bg-(--app-accent) text-white"><Barcode className="size-4" /></span>
+          <span className="hidden text-sm font-semibold tracking-tight md:inline">EASY LABELS <span className="font-normal text-[#6B7280]">by HC</span></span>
         </div>
         <ToolButton testId="toolbar-preview-button" icon={<Eye />} label="Preview" primary onClick={() => setDialog("preview")} disabled={!tpl} />
         <ToolButton testId="toolbar-print-button" icon={<Printer />} label="Print" primary onClick={() => runPrint(printRows)} disabled={!tpl} />
@@ -262,12 +267,16 @@ export default function Workspace() {
         <ToolButton testId="save-template-button" icon={<Save />} label="Save" onClick={() => save.mutate()} disabled={!tpl || !draft?.dirty || save.isPending} />
         <ToolButton testId="undo-button" icon={<Undo2 />} label="Undo" onClick={undo} disabled={!draft?.past.length} />
         <ToolButton testId="redo-button" icon={<Redo2 />} label="Redo" onClick={redo} disabled={!draft?.future.length} />
+        <ToolButton testId="sheet-data-page-button" icon={<Table2 />} label="Sheet data" primary
+          onClick={() => { if (draft?.dirty) save.mutate(); nav(source ? `/data/${source.id}` : "/data"); }} />
+        <ToolButton testId="page-setup-button" icon={<Settings2 />} label="Page setup" onClick={() => setDialog("pagesetup")} disabled={!tpl} />
         <ToolButton testId="label-properties-button" icon={<SlidersHorizontal />} label="Label properties" onClick={() => setSelectedId(null)} disabled={!tpl} />
         <span className="mx-1 h-6 w-px bg-[#E5E7EB]" />
         <ToolButton testId="open-label-button" icon={<FolderOpen />} label="Open label" onClick={() => setDialog("open")} />
         <ToolButton testId="new-template-button" icon={<FilePlus2 />} label="New label" primary onClick={() => setDialog("new")} />
         <ToolButton testId="copy-label-button" icon={<Copy />} label="Create a copy" onClick={() => tpl && duplicate.mutate(tpl.id)} disabled={!tpl} />
         <span className="ml-auto pr-2 text-xs text-[#6B7280]" data-testid="save-status">{tpl ? (draft?.dirty ? "● Unsaved changes" : "Saved") : ""}</span>
+        <ThemePicker />
       </header>
 
       {/* Label tabs */}
@@ -310,6 +319,7 @@ export default function Workspace() {
             canRefresh={canRefresh} refreshing={refreshCopy.isPending} onRefresh={onRefresh}
             onOpenImport={() => setDialog("import")}
             onToggle={(ids, on) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (ids.includes(r.id) ? { ...r, selected: on } : r)) }))}
+            qtyColumn={qtyColumn} onQtyColumn={(col) => updateCopy((c) => ({ ...c, qty_column: col }))}
             onQty={(id, qty) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (r.id === id ? { ...r, qty } : r)) }))}
             onEditData={() => { if (draft?.dirty) save.mutate(); }}
             onPrintRow={(r) => runPrint([r], true)} onPreview={() => setDialog("preview")} onPrint={() => runPrint(printRows)}
@@ -318,10 +328,10 @@ export default function Workspace() {
       ) : (
         <div className="grid flex-1 place-items-center" data-testid="workspace-empty">
           <div className="text-center">
-            <Barcode className="mx-auto mb-3 size-10 text-[#1A73E8]" />
+            <Barcode className="mx-auto mb-3 size-10 text-(--app-accent)" />
             <p className="mb-4 text-sm text-[#4B5563]">{templatesQ.isLoading ? "Loading labels…" : "No label open."}</p>
             <div className="flex justify-center gap-2">
-              <button data-testid="empty-new-label-button" onClick={() => setDialog("new")} className="rounded-md bg-[#1A73E8] px-4 py-2 text-sm text-white hover:bg-[#1765CC]">New label</button>
+              <button data-testid="empty-new-label-button" onClick={() => setDialog("new")} className="rounded-md bg-(--app-accent) px-4 py-2 text-sm text-white hover:bg-(--app-accent-hover)">New label</button>
               <button data-testid="empty-open-label-button" onClick={() => setDialog("open")} className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm hover:bg-[#F3F4F6]">Open label</button>
             </div>
           </div>
@@ -341,9 +351,13 @@ export default function Workspace() {
         onChoose={(mode) => refreshCopy.mutate(mode, { onSuccess: () => setDialog(null) })} />
       {tpl && (
         <PrintPreviewDialog open={dialog === "preview"} onOpenChange={(o) => setDialog(o ? "preview" : null)} template={tpl} rows={printRows} mapping={mapping}
-          missing={missing} layout={layout} onLayout={setLayout} onPrint={() => runPrint(printRows)} />
+          ps={tpl.page_setup} missing={missing} onPrint={() => runPrint(printRows)} onPageSetup={() => setDialog("pagesetup")} />
       )}
-      {tpl && printJob && <PrintPortal template={tpl} rows={printJob.rows} mapping={mapping} layout={printJob.single ? { ...layout, mode: "roll" } : layout} />}
+      {tpl && (
+        <PageSetupDialog open={dialog === "pagesetup"} onOpenChange={(o) => setDialog(o ? "pagesetup" : null)} template={tpl} value={tpl.page_setup}
+          onSave={(ps) => { persist({ page_setup: ps }, "Could not save page setup"); setDialog(null); toast.success("Page setup saved"); }} />
+      )}
+      {tpl && printJob && <PrintPortal template={tpl} ps={tpl.page_setup} rows={printJob.rows} mapping={mapping} />}
     </div>
   );
 }

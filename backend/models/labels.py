@@ -38,6 +38,26 @@ class LabelElement(BaseModel):
     rotation: int = 0
 
 
+class PageSetup(BaseModel):
+    """Printer page setup, saved per label. Geometry in mm."""
+    paper: Literal["label", "a4", "letter", "custom"] = "label"  # "label" = roll: page sized to the label row
+    paper_w: float = Field(default=210, gt=0, le=1000)
+    paper_h: float = Field(default=297, gt=0, le=2000)
+    orientation: Literal["portrait", "landscape"] = "portrait"
+    cols: int = Field(default=0, ge=0, le=50)  # 0 = auto-fit (roll: 1)
+    rows: int = Field(default=0, ge=0, le=100)  # 0 = auto-fit
+    gap_x: float = Field(default=0, ge=0, le=100)
+    gap_y: float = Field(default=0, ge=0, le=100)
+    margin_top: float = Field(default=0, ge=0, le=100)
+    margin_right: float = Field(default=0, ge=0, le=100)
+    margin_bottom: float = Field(default=0, ge=0, le=100)
+    margin_left: float = Field(default=0, ge=0, le=100)
+    offset_x: float = Field(default=0, ge=-50, le=50)  # printer calibration shift
+    offset_y: float = Field(default=0, ge=-50, le=50)
+    order: Literal["across", "down"] = "across"
+    start_position: int = Field(default=1, ge=1, le=1000)  # skip used labels on a partly used sheet
+
+
 class TemplateBase(BaseModel):
     name: str = Field(min_length=1)
     brand: str = "General"
@@ -46,6 +66,7 @@ class TemplateBase(BaseModel):
     background: str = "#FFFFFF"
     elements: List[LabelElement] = []
     source_id: Optional[str] = None  # remembered print-data sheet
+    page_setup: PageSetup = Field(default_factory=PageSetup)
 
 
 class Template(TemplateBase):
@@ -63,6 +84,10 @@ class SheetSourceCreate(BaseModel):
 
 class SheetSource(SheetSourceCreate):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    workbook: Optional[str] = None  # groups tabs of one spreadsheet/file (Google sheet id or "upload:<batch>")
+    workbook_name: Optional[str] = None
+    tab: Optional[str] = None  # tab name inside the workbook
+    tab_index: int = 0
     created_at: datetime = Field(default_factory=_now)
 
 
@@ -88,6 +113,7 @@ class CopyRow(BaseModel):
 class SheetCopyUpdate(BaseModel):
     columns: List[str]
     rows: List[CopyRow]
+    qty_column: Optional[str] = None  # read print quantity per row from this column (None = manual qty)
 
 
 class SheetCopy(SheetCopyUpdate):

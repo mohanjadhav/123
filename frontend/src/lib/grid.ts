@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import type { Row } from "@/lib/types";
+import type { CopyRow, Row } from "@/lib/types";
 
 export const MIN_COL_W = 56;
 const MAX_AUTO_W = 360;
@@ -55,3 +55,18 @@ export function useColumnWidths(columns: string[], rows: Row[]) {
   const autoFit = (col: string) => setManual(({ [col]: _drop, ...rest }) => rest);
   return { widthOf, startResize, autoFit };
 }
+
+/** Labels to print for a row: from the quantity column when set ("2", "2.0", "1,000"), else the manual qty. Blank/0 = none. */
+export function rowQty(r: CopyRow, qtyColumn: string | null | undefined): number {
+  if (!qtyColumn) return r.qty;
+  const n = Math.floor(parseFloat((r.cells[qtyColumn] ?? "").replace(/,/g, "").trim()));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 9999) : 0;
+}
+
+/** Labels for every ticked row, repeated by its quantity. */
+export function expandRows(rows: CopyRow[], qtyColumn: string | null | undefined): Row[] {
+  return rows.flatMap((r) => (r.selected ? Array.from({ length: rowQty(r, qtyColumn) }, () => r.cells) : []));
+}
+
+const QTY_HINT = /(qty|quantity|copies|print|labels?|nos|count|pcs)/i;
+export const suggestQtyColumn = (columns: string[]) => columns.find((c) => QTY_HINT.test(c)) ?? null;

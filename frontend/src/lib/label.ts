@@ -1,4 +1,4 @@
-import type { LabelElement, Mapping, Row, SheetData, SheetSource, Template, TemplateBase } from "@/lib/types";
+import type { LabelElement, LabelShape, Mapping, PageSetup, Row, SheetData, SheetSource, Template, TemplateBase } from "@/lib/types";
 import { apiGet, apiPost } from "@/lib/api";
 
 export const FONTS: Record<string, string> = {
@@ -21,6 +21,11 @@ export const SIZE_PRESETS: { label: string; w: number; h: number }[] = [
 ];
 
 export const MM_TO_PX = 96 / 25.4;
+
+export const DEFAULT_PAGE_SETUP: PageSetup = {
+  paper: "label", paper_w: 210, paper_h: 297, orientation: "portrait", cols: 0, rows: 0, gap_x: 0, gap_y: 0,
+  margin_top: 0, margin_right: 0, margin_bottom: 0, margin_left: 0, offset_x: 0, offset_y: 0, order: "across", start_position: 1,
+};
 
 const PLACEHOLDER = /\{\{\s*([^}]+?)\s*\}\}/g;
 
@@ -56,7 +61,7 @@ export function autoMapping(placeholders: string[], columns: string[]): Mapping 
   return map;
 }
 
-export function newElement(type: LabelElement["type"], tpl: TemplateBase): LabelElement {
+export function newElement(type: LabelElement["type"], tpl: Pick<LabelShape, "width_mm" | "height_mm">): LabelElement {
   const base: LabelElement = {
     id: crypto.randomUUID(),
     type,

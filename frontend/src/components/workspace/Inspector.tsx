@@ -44,7 +44,7 @@ function Color({ label, value, onChange, allowNone, testId }: { label: string; v
           className={cn("h-7 w-9 cursor-pointer rounded border border-[#D1D5DB] bg-white p-0.5", none && "opacity-40")} />
         {allowNone && (
           <button type="button" data-testid={`${testId}-none`} onClick={() => onChange(none ? "#111827" : "transparent")}
-            className={cn("rounded border px-1.5 py-1 text-[10px]", none ? "border-[#1A73E8] bg-[#E8F0FE] text-[#1A73E8]" : "border-[#D1D5DB] text-[#4B5563]")}>None</button>
+            className={cn("rounded border px-1.5 py-1 text-[10px]", none ? "border-(--app-accent) bg-(--app-accent-soft) text-(--app-accent)" : "border-[#D1D5DB] text-[#4B5563]")}>None</button>
         )}
       </span>
     </label>
@@ -55,7 +55,7 @@ function Toggle({ active, onClick, children, testId, title }: { active: boolean;
   return (
     <button type="button" title={title} data-testid={testId} onClick={onClick}
       className={cn("grid size-7 place-items-center rounded border transition-colors duration-150 [&_svg]:size-3.5",
-        active ? "border-[#1A73E8] bg-[#E8F0FE] text-[#1A73E8]" : "border-[#D1D5DB] bg-white text-[#374151] hover:bg-[#F3F4F6]")}>
+        active ? "border-(--app-accent) bg-(--app-accent-soft) text-(--app-accent)" : "border-[#D1D5DB] bg-white text-[#374151] hover:bg-[#F3F4F6]")}>
       {children}
     </button>
   );

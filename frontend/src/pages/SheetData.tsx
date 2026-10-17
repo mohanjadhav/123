@@ -1,19 +1,24 @@
 import { useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import type { KeyboardEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Barcode, CopyPlus, FileSpreadsheet, Info, Plus, RefreshCw, RotateCcw, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Barcode, CopyPlus, Eye, FileSpreadsheet, Info, Plus, Printer, RefreshCw, RotateCcw, Search, Tag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { ThemePicker } from "@/components/ThemePicker";
 import { ColumnHeader } from "@/components/workspace/ColumnHeader";
 import { RefreshDialog } from "@/components/workspace/RefreshDialog";
+import { SheetTabs } from "@/components/workspace/SheetTabs";
+import { PrintPortal, PrintPreviewDialog } from "@/components/workspace/PrintPreview";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiErrorDetail } from "@/lib/api";
-import { useColumnWidths } from "@/lib/grid";
-import { fetchSources } from "@/lib/label";
-import type { CopyRow } from "@/lib/types";
+import { expandRows, rowQty, useColumnWidths } from "@/lib/grid";
+import { QtyColumnSelect } from "@/components/workspace/QtyColumnSelect";
+import { autoMapping, fetchSources, fetchTemplates, placeholdersOf } from "@/lib/label";
+import type { CopyRow, Row } from "@/lib/types";
 import { useSheetCopy } from "@/lib/useSheetCopy";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +36,13 @@ export default function SheetData() {
   const [editing, setEditing] = useState<{ id: string; col: string } | null>(null);
   const [draft, setDraft] = useState("");
   const [refreshOpen, setRefreshOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [printJob, setPrintJob] = useState<Row[] | null>(null);
+  const [pickedTpl, setPickedTpl] = useState("");
+  const templatesQ = useQuery({ queryKey: ["templates"], queryFn: fetchTemplates });
+  const templates = templatesQ.isError ? [] : (templatesQ.data ?? []);
+  // Label to print with: user's pick, else the label linked to this sheet, else the newest label.
+  const tpl = templates.find((t) => t.id === pickedTpl) ?? templates.find((t) => t.source_id === sourceId) ?? templates[0] ?? null;
 
   const columns = useMemo(() => copy?.columns ?? [], [copy]);
   const rows = useMemo(() => copy?.rows ?? [], [copy]);
@@ -46,8 +58,20 @@ export default function SheetData() {
 
   const visible = rows.map((r, i) => ({ r, i })).filter(({ r }) => !q || Object.values(r.cells).some((v) => v.toLowerCase().includes(q.toLowerCase())));
   const allOn = visible.length > 0 && visible.every(({ r }) => r.selected);
-  const labels = rows.reduce((n, r) => n + (r.selected ? r.qty : 0), 0);
+  const qtyColumn = copy?.qty_column ?? null;
+  const labels = rows.reduce((n, r) => n + (r.selected ? rowQty(r, qtyColumn) : 0), 0);
   const canRefresh = !!source && !source.url.startsWith("upload:") && source.url !== "sample";
+  const placeholders = useMemo(() => (tpl ? placeholdersOf(tpl) : []), [tpl]);
+  const mapping = useMemo(() => autoMapping(placeholders, columns), [placeholders, columns]);
+  const missing = columns.length ? placeholders.filter((p) => !mapping[p]) : [];
+  const printRows = expandRows(rows, qtyColumn);
+  const runPrint = () => {
+    if (!tpl) return toast.error("Create a label in the designer first");
+    if (!printRows.length) return toast.error("Tick at least one row to print");
+    flushSync(() => setPrintJob(printRows));
+    window.print();
+    setPrintJob(null);
+  };
 
   const setRows = (fn: (rows: CopyRow[]) => CopyRow[]) => update((c) => ({ ...c, rows: fn(c.rows) }));
   const patchRow = (id: string, patch: Partial<CopyRow>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -90,12 +114,12 @@ export default function SheetData() {
   return (
     <div className="flex h-screen flex-col bg-[#EEF0F3] text-[#1F2937]">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[#D9DDE3] bg-white px-3" data-testid="sheet-data-header">
-        <Link to="/" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-[#1A73E8]")} data-testid="back-to-designer-link">
+        <Link to="/" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-(--app-accent)")} data-testid="back-to-designer-link">
           <ArrowLeft /> Back to designer
         </Link>
         <span className="h-6 w-px bg-[#E5E7EB]" />
-        <span className="grid size-7 place-items-center rounded-md bg-[#1A73E8] text-white"><Barcode className="size-4" /></span>
-        <h1 className="text-sm font-semibold">Sheet data</h1>
+        <span className="grid size-7 place-items-center rounded-md bg-(--app-accent) text-white"><Barcode className="size-4" /></span>
+        <h1 className="text-sm font-semibold">EASY LABELS <span className="font-normal text-[#6B7280]">by HC</span> <span className="font-normal text-[#9CA3AF]">· Sheet data</span></h1>
         <Select value={sourceId} onValueChange={(v: string) => { setEditing(null); nav(`/data/${v}`); }}>
           <SelectTrigger size="sm" className="h-8 w-64 bg-white" data-testid="sheet-data-source-select">
             <FileSpreadsheet className="size-3.5 text-[#188038]" />
@@ -105,10 +129,13 @@ export default function SheetData() {
         </Select>
         {copy?.edited && <span className="rounded bg-[#FEF7E0] px-2 py-0.5 text-[11px] font-medium text-[#B06000]" data-testid="sheet-edited-badge">Edited in app</span>}
         <span className={cn("ml-auto text-xs", saveState === "error" ? "text-[#D93025]" : "text-[#6B7280]")} data-testid="sheet-save-status">{copy ? SAVE_LABEL[saveState] : ""}</span>
+        <ThemePicker />
       </header>
 
+      <SheetTabs sources={sources} active={source} onSelect={(s) => { setEditing(null); setQ(""); nav(`/data/${s.id}`); }} testId="data-sheet-tabs" />
+
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#D9DDE3] bg-[#F8F9FB] px-3 py-2">
-        <Button size="sm" data-testid="add-row-button" disabled={!copy} onClick={addRow} className="bg-[#1A73E8] text-white hover:bg-[#1765CC]"><Plus /> Add row</Button>
+        <Button size="sm" data-testid="add-row-button" disabled={!copy} onClick={addRow} className="bg-(--app-accent) text-white hover:bg-(--app-accent-hover)"><Plus /> Add row</Button>
         <Button size="sm" variant="outline" className="bg-white" data-testid="refresh-from-google-button" disabled={!canRefresh || refresh.isPending}
           title={canRefresh ? "Get the latest rows from Google Sheets" : "Only Google Sheet links can refresh"}
           onClick={() => (copy?.edited ? setRefreshOpen(true) : refresh.mutate("replace"))}>
@@ -118,6 +145,7 @@ export default function SheetData() {
           onClick={() => confirm("Discard all edits, quantities and ticks and reload the original sheet data?") && refresh.mutate("replace")}>
           <RotateCcw /> Reset to original
         </Button>
+        <QtyColumnSelect columns={columns} value={qtyColumn} onChange={(col) => update((c) => ({ ...c, qty_column: col }))} testId="data-qty-column-select" className="h-8" />
         <div className="relative">
           <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[#9CA3AF]" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search rows" data-testid="sheet-data-search" className="h-8 w-52 bg-white pl-7 text-xs" />
@@ -125,10 +153,20 @@ export default function SheetData() {
         <span className="ml-auto text-xs text-[#4B5563]" data-testid="sheet-data-stats">
           {rows.length} rows · {rows.filter((r) => r.selected).length} ticked · <b>{labels}</b> labels to print
         </span>
+        <span className="h-6 w-px bg-[#D9DDE3]" />
+        <Select value={tpl?.id ?? ""} onValueChange={(v: string) => setPickedTpl(v)}>
+          <SelectTrigger size="sm" className="h-8 w-60 bg-white" data-testid="data-label-select">
+            <Tag className="size-3.5 text-(--app-accent)" />
+            <SelectValue placeholder="Choose label">{(v) => { const t = templates.find((x) => x.id === v); return t ? `${t.brand} — ${t.name}` : "Choose label"; }}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.brand} — {t.name}</SelectItem>)}</SelectContent>
+        </Select>
+        <Button size="sm" variant="outline" className="bg-white" data-testid="data-preview-button" disabled={!tpl || !copy} onClick={() => setPreviewOpen(true)}><Eye /> Preview</Button>
+        <Button size="sm" className="bg-[#188038] text-white hover:bg-[#146C2E]" data-testid="data-print-button" disabled={!tpl || !copy} onClick={runPrint}><Printer /> Print</Button>
       </div>
 
-      <p className="flex shrink-0 items-center gap-2 border-b border-[#D2E3FC] bg-[#E8F0FE] px-3 py-1.5 text-xs text-[#174EA6]" data-testid="sheet-data-notice">
-        <Info className="size-3.5" /> Changes here are saved in BARCODR only — your original Google Sheet / file is never changed. Click a cell to edit · Enter / Tab to move · Esc to cancel.
+      <p className="flex shrink-0 items-center gap-2 border-b border-(--app-accent-ring) bg-(--app-accent-soft) px-3 py-1.5 text-xs text-(--app-accent-hover)" data-testid="sheet-data-notice">
+        <Info className="size-3.5" /> Changes here are saved in EASY LABELS only — your original Google Sheet / file is never changed. Click a cell to edit · Enter / Tab to move · Esc to cancel.
       </p>
 
       <main className="min-h-0 flex-1 overflow-auto bg-white">
@@ -153,7 +191,9 @@ export default function SheetData() {
                 <th className="border-b border-r border-[#E5E7EB] px-2 py-1.5 text-center">
                   <Checkbox data-testid="sheet-data-select-all" checked={allOn} onCheckedChange={() => { const ids = new Set(visible.map((v) => v.r.id)); setRows((rs) => rs.map((r) => (ids.has(r.id) ? { ...r, selected: !allOn } : r))); }} />
                 </th>
-                <th className="border-b border-r border-[#E5E7EB] px-2 py-1.5 font-semibold">Qty</th>
+                <th className="border-b border-r border-[#E5E7EB] px-2 py-1.5 font-semibold" title={qtyColumn ? `Read from column "${qtyColumn}"` : "Type the number of labels"}>
+                  Qty{qtyColumn && <span className="ml-1 text-[9px] font-normal text-(--app-accent)">auto</span>}
+                </th>
                 {columns.map((c) => <ColumnHeader key={c} col={c} onResizeStart={startResize} onAutoFit={autoFit} />)}
                 <th className="border-b border-[#E5E7EB]" />
               </tr>
@@ -162,16 +202,22 @@ export default function SheetData() {
               {visible.map(({ r, i }) => {
                 const orig = originals[r.id];
                 return (
-                  <tr key={r.id} data-testid={`data-row-${i}`} className={cn("group", !r.selected && "text-[#9CA3AF]")}>
+                  <tr key={r.id} data-testid={`data-row-${i}`} className={cn("group", (!r.selected || rowQty(r, qtyColumn) === 0) && "text-[#9CA3AF]")}>
                     <td className={cn("border-b border-r border-[#EEF0F2] bg-[#F9FAFB] px-2 py-1 text-center font-mono text-[10px] text-[#9CA3AF]", !orig && "border-l-[3px] border-l-[#188038]")}
                       title={orig ? undefined : "Added in app"}>{i + 1}</td>
                     <td className="border-b border-r border-[#EEF0F2] px-2 py-1 text-center">
                       <Checkbox data-testid={`data-row-checkbox-${i}`} checked={r.selected} onCheckedChange={() => patchRow(r.id, { selected: !r.selected })} />
                     </td>
                     <td className="border-b border-r border-[#EEF0F2] px-1 py-0.5">
-                      <input type="number" min={1} data-testid={`data-row-qty-${i}`} value={r.qty}
-                        onChange={(e) => patchRow(r.id, { qty: Math.max(1, Math.min(9999, parseInt(e.target.value) || 1)) })}
-                        className="h-6 w-full rounded border border-transparent bg-transparent px-1.5 font-mono text-xs outline-none focus:border-[#1A73E8] focus:bg-white" />
+                      {qtyColumn ? (
+                        <span data-testid={`data-row-qty-auto-${i}`} title={`From "${qtyColumn}" — edit that cell to change`} className="block px-1.5 font-mono text-xs font-semibold text-(--app-accent)">
+                          {rowQty(r, qtyColumn) || "—"}
+                        </span>
+                      ) : (
+                        <input type="number" min={1} data-testid={`data-row-qty-${i}`} value={r.qty}
+                          onChange={(e) => patchRow(r.id, { qty: Math.max(1, Math.min(9999, parseInt(e.target.value) || 1)) })}
+                          className="h-6 w-full rounded border border-transparent bg-transparent px-1.5 font-mono text-xs outline-none focus:border-(--app-accent) focus:bg-white" />
+                      )}
                     </td>
                     {columns.map((c) => {
                       const isEditing = editing?.id === r.id && editing.col === c;
@@ -179,7 +225,7 @@ export default function SheetData() {
                       return (
                         <td key={c} data-testid={`data-cell-${i}-${c}`} title={changed ? `Original: ${orig?.[c] || "(empty)"}` : r.cells[c]}
                           onClick={() => !isEditing && startEdit(r, c)}
-                          className={cn("h-7 cursor-text truncate border-b border-r border-[#EEF0F2] px-2 py-0", changed && "bg-[#FEF7E0]", isEditing && "p-0 outline outline-2 -outline-offset-2 outline-[#1A73E8]")}>
+                          className={cn("h-7 cursor-text truncate border-b border-r border-[#EEF0F2] px-2 py-0", c === qtyColumn && "bg-(--app-accent-soft) font-semibold", changed && "bg-[#FEF7E0]", isEditing && "p-0 outline outline-2 -outline-offset-2 outline-(--app-accent)")}>
                           {isEditing ? (
                             <input autoFocus data-testid="data-cell-editor" value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => onCellKey(e, r, c)}
                               className="h-7 w-full bg-white px-2 text-xs text-[#1F2937] outline-none" />
@@ -200,6 +246,11 @@ export default function SheetData() {
           </table>
         )}
       </main>
+      {tpl && (
+        <PrintPreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} template={tpl} ps={tpl.page_setup} rows={printRows} mapping={mapping} missing={missing}
+          onPrint={runPrint} onPageSetup={() => toast.info("Open Page setup in the designer to change paper & layout")} />
+      )}
+      {tpl && printJob && <PrintPortal template={tpl} ps={tpl.page_setup} rows={printJob} mapping={mapping} />}
       <RefreshDialog open={refreshOpen} onOpenChange={setRefreshOpen} pending={refresh.isPending}
         onChoose={(mode) => refresh.mutate(mode, { onSuccess: () => setRefreshOpen(false) })} />
     </div>

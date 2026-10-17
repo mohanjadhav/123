@@ -18,8 +18,8 @@ export function RefreshDialog({ open, onOpenChange, onChoose, pending }: {
         </DialogHeader>
         <div className="grid gap-2">
           <button data-testid="refresh-merge-button" disabled={pending} onClick={() => onChoose("merge")}
-            className="flex items-start gap-3 rounded-lg border border-[#D9DDE3] p-3 text-left transition-colors duration-150 hover:border-[#1A73E8] hover:bg-[#F8FAFF] disabled:opacity-50">
-            <RefreshCw className="mt-0.5 size-4 shrink-0 text-[#1A73E8]" />
+            className="flex items-start gap-3 rounded-lg border border-[#D9DDE3] p-3 text-left transition-colors duration-150 hover:border-(--app-accent) hover:bg-[#F8FAFF] disabled:opacity-50">
+            <RefreshCw className="mt-0.5 size-4 shrink-0 text-(--app-accent)" />
             <span>
               <span className="block text-sm font-medium">Keep my edits, add new rows only</span>
               <span className="block text-xs text-[#6B7280]">Rows added to the Google Sheet since the last load are appended. Your edited rows, quantities and ticks stay.</span>

@@ -1,14 +1,14 @@
 import { newElement } from "@/lib/label";
 import type { LabelElement, TemplateBase } from "@/lib/types";
 
-const BIG: TemplateBase = { name: "", brand: "", width_mm: 400, height_mm: 400, background: "#FFFFFF", elements: [], source_id: null };
+const BIG = { width_mm: 400, height_mm: 400 };
 const el = (type: LabelElement["type"], p: Partial<LabelElement>): LabelElement => ({ ...newElement(type, BIG), ...p });
 
 export interface Starter {
   key: string;
   title: string;
   description: string;
-  tpl: Omit<TemplateBase, "name" | "brand" | "source_id">;
+  tpl: Omit<TemplateBase, "name" | "brand" | "source_id" | "page_setup">;
 }
 
 export const STARTERS: Starter[] = [

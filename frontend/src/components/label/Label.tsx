@@ -1,6 +1,6 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { FONTS, interpolate, MM_TO_PX } from "@/lib/label";
-import type { BarcodeFormat, LabelElement, Mapping, Row, TemplateBase } from "@/lib/types";
+import type { BarcodeFormat, LabelElement, LabelShape, Mapping, Row } from "@/lib/types";
 import { BarcodeSvg, QrSvg } from "@/components/label/Codes";
 
 const SAMPLE_BARCODE: Record<BarcodeFormat, string> = {
@@ -75,7 +75,7 @@ export function elementBoxStyle(el: LabelElement): CSSProperties {
 }
 
 interface LabelProps {
-  template: TemplateBase;
+  template: LabelShape;
   row?: Row | null;
   mapping?: Mapping;
   renderElement?: (el: LabelElement, body: ReactNode) => ReactNode;

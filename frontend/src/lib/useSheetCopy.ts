@@ -35,7 +35,7 @@ export function useSheetCopy(sourceId: string | null) {
       if (!latest) return;
       setSaveState("saving");
       try {
-        const saved = await apiPut<SheetCopy>(`/sheets/copy/${sourceId}`, { columns: latest.columns, rows: latest.rows });
+        const saved = await apiPut<SheetCopy>(`/sheets/copy/${sourceId}`, { columns: latest.columns, rows: latest.rows, qty_column: latest.qty_column ?? null });
         qc.setQueryData<SheetCopy>(key, (c) => (c ? { ...c, edited: saved.edited, updated_at: saved.updated_at } : saved));
         setSaveState("idle");
       } catch {

@@ -32,7 +32,7 @@ export function LeftPanel({ onTool, columns, sourceName, onPickField, onOpenImpo
       <div className="grid grid-cols-6 gap-0.5 border-b border-[#E5E7EB] p-1.5" data-testid="tool-palette">
         {TOOLS.map((t) => (
           <button key={t.key} title={`Add ${t.label}`} data-testid={`add-${t.key === "shape" ? "shape" : t.key}-button`} onClick={() => onTool(t)}
-            className="grid h-8 place-items-center rounded text-[#374151] transition-colors duration-150 hover:bg-[#E8F0FE] hover:text-[#1A73E8] [&_svg]:size-4">
+            className="grid h-8 place-items-center rounded text-[#374151] transition-colors duration-150 hover:bg-(--app-accent-soft) hover:text-(--app-accent) [&_svg]:size-4">
             {t.icon}
           </button>
         ))}
@@ -47,7 +47,7 @@ export function LeftPanel({ onTool, columns, sourceName, onPickField, onOpenImpo
           <div className="mx-3 rounded-lg border border-dashed border-[#C7CCD3] p-3 text-center text-[11px] leading-relaxed text-[#6B7280]" data-testid="data-fields-empty">
             <Database className="mx-auto mb-1.5 size-5 text-[#9CA3AF]" />
             Connect a Google Sheet to see its column headers here.
-            <button data-testid="data-fields-import-button" onClick={onOpenImport} className="mt-2 block w-full rounded bg-[#1A73E8] py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[#1765CC]">
+            <button data-testid="data-fields-import-button" onClick={onOpenImport} className="mt-2 block w-full rounded bg-(--app-accent) py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-(--app-accent-hover)">
               Import data
             </button>
           </div>
@@ -66,7 +66,7 @@ export function LeftPanel({ onTool, columns, sourceName, onPickField, onOpenImpo
                     onClick={() => onPickField(c)}
                     data-testid={`column-chip-${c}`}
                     title="Click to insert into the selected element, or drag onto the label"
-                    className="flex w-full cursor-grab items-center gap-2 rounded px-2 py-1 text-left text-xs text-[#1F2937] transition-colors duration-150 hover:bg-[#E8F0FE] active:cursor-grabbing"
+                    className="flex w-full cursor-grab items-center gap-2 rounded px-2 py-1 text-left text-xs text-[#1F2937] transition-colors duration-150 hover:bg-(--app-accent-soft) active:cursor-grabbing"
                   >
                     <span className="grid size-4 place-items-center rounded-sm bg-[#E6F4EA] font-mono text-[8px] font-bold text-[#188038]">ab</span>
                     <span className="truncate">{c}</span>
@@ -83,7 +83,7 @@ export function LeftPanel({ onTool, columns, sourceName, onPickField, onOpenImpo
         {[...layers].reverse().map((el) => (
           <button key={el.id} data-testid={`layer-item-${el.id}`} onClick={() => onSelect(el.id)}
             className={cn("flex w-full items-center gap-2 truncate rounded px-2 py-1 text-left text-xs transition-colors duration-150",
-              el.id === selectedId ? "bg-[#E8F0FE] text-[#1A73E8]" : "text-[#374151] hover:bg-[#F3F4F6]")}>
+              el.id === selectedId ? "bg-(--app-accent-soft) text-(--app-accent)" : "text-[#374151] hover:bg-[#F3F4F6]")}>
             <span className="w-11 shrink-0 text-[9px] uppercase text-[#9CA3AF]">{el.type === "rect" ? "shape" : el.type}</span>
             <span className="truncate">{el.content || (el.image_url.startsWith("data:") ? "uploaded image" : el.image_url) || "—"}</span>
           </button>

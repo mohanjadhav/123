@@ -4,7 +4,7 @@ import { Label as LabelView, Scaled } from "@/components/label/Label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MM_TO_PX } from "@/lib/label";
+import { DEFAULT_PAGE_SETUP, MM_TO_PX } from "@/lib/label";
 import { STARTERS } from "@/lib/starters";
 import type { Template, TemplateBase } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,7 @@ export function NewLabelDialog({ open, onOpenChange, brands, onCreate, pending }
       name: name.trim() || starter.title,
       brand: brand.trim() || "General",
       source_id: null,
+      page_setup: DEFAULT_PAGE_SETUP,
     });
   };
 
@@ -49,10 +50,10 @@ export function NewLabelDialog({ open, onOpenChange, brands, onCreate, pending }
           {STARTERS.map((s) => (
             <button key={s.key} data-testid={`starter-${s.key}`} onClick={() => setKey(s.key)}
               className={cn("overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow] duration-150",
-                key === s.key ? "border-[#1A73E8] shadow-[0_0_0_2px_#D2E3FC]" : "border-[#D9DDE3] hover:border-[#9DB9F0]")}>
+                key === s.key ? "border-(--app-accent) shadow-[0_0_0_2px_var(--app-accent-ring)]" : "border-[#D9DDE3] hover:border-(--app-accent-ring)")}>
               <div className="grid h-28 place-items-center bg-[#F1F3F4]">
                 <Scaled widthMm={s.tpl.width_mm} heightMm={s.tpl.height_mm} scale={fit(s.tpl, 170, 92)} className="shadow-[0_1px_4px_rgba(0,0,0,0.2)]">
-                  <LabelView template={{ ...s.tpl, name: s.title, brand: "", source_id: null }} />
+                  <LabelView template={s.tpl} />
                 </Scaled>
               </div>
               <div className="px-3 py-2">
@@ -82,7 +83,7 @@ export function NewLabelDialog({ open, onOpenChange, brands, onCreate, pending }
           )}
         </div>
         <DialogFooter>
-          <Button data-testid="new-template-submit-button" disabled={pending} onClick={submit} className="bg-[#1A73E8] text-white hover:bg-[#1765CC]">Create label</Button>
+          <Button data-testid="new-template-submit-button" disabled={pending} onClick={submit} className="bg-(--app-accent) text-white hover:bg-(--app-accent-hover)">Create label</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -118,10 +119,10 @@ export function OpenLabelDialog({ open, onOpenChange, templates, onOpen, onDupli
           {groups.length === 0 && <p className="py-6 text-center text-sm text-[#6B7280]">No labels found.</p>}
           {groups.map(([brand, list]) => (
             <div key={brand} className="mb-4">
-              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#1A73E8]">{brand}</h4>
+              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-(--app-accent)">{brand}</h4>
               <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
                 {list.map((t) => (
-                  <div key={t.id} data-testid={`template-card-${t.id}`} className="group overflow-hidden rounded-lg border border-[#D9DDE3] transition-[border-color] duration-150 hover:border-[#1A73E8]">
+                  <div key={t.id} data-testid={`template-card-${t.id}`} className="group overflow-hidden rounded-lg border border-[#D9DDE3] transition-[border-color] duration-150 hover:border-(--app-accent)">
                     <button className="grid h-24 w-full place-items-center bg-[#F1F3F4]" onClick={() => onOpen(t.id)} data-testid={`open-template-${t.id}`}>
                       <Scaled widthMm={t.width_mm} heightMm={t.height_mm} scale={fit(t, 160, 80)} className="shadow-[0_1px_4px_rgba(0,0,0,0.2)]">
                         <LabelView template={t} />

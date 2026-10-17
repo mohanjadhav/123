@@ -10,6 +10,7 @@ from urllib.parse import unquote
 import httpx
 import openpyxl
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from lib.db import db
 import json
@@ -141,6 +142,7 @@ async def upload_sheet(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx file")
     created: List[SheetSource] = []
     multi = len(tables) > 1
+    batch = f"upload:{uuid.uuid4()}"
     for tab, table in tables:
         columns, rows = parse_table(table)
         if not columns:
@@ -148,7 +150,8 @@ async def upload_sheet(file: UploadFile = File(...)):
         upload_id = str(uuid.uuid4())
         name = f"{stem} — {tab}" if multi else stem
         await db.sheet_uploads.insert_one({"id": upload_id, "name": name, "columns": columns, "rows": rows})
-        src = SheetSource(name=name, brand=tab if multi else "General", url=f"upload:{upload_id}")
+        src = SheetSource(name=name, brand=tab if multi else "General", url=f"upload:{upload_id}",
+                          workbook=batch, workbook_name=stem, tab=tab or stem, tab_index=len(created))
         await db.sheet_sources.insert_one(src.model_dump())
         created.append(src)
     if not created:
@@ -164,7 +167,7 @@ def sample_sheet():
 
 @router.get("/sources", response_model=List[SheetSource])
 async def list_sources():
-    docs = await db.sheet_sources.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    docs = await db.sheet_sources.find({}, {"_id": 0}).sort([("created_at", -1), ("tab_index", 1)]).to_list(1000)
     return [SheetSource(**d) for d in docs]
 
 
@@ -180,7 +183,8 @@ async def update_source(id: str, body: SheetSourceCreate):
     existing = await db.sheet_sources.find_one({"id": id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Source not found")
-    src = SheetSource(**body.model_dump(), id=id, created_at=existing["created_at"])
+    keep = {k: existing.get(k) for k in ("workbook", "workbook_name", "tab", "tab_index") if existing.get(k) is not None}
+    src = SheetSource(**body.model_dump(), id=id, created_at=existing["created_at"], **keep)
     await db.sheet_sources.replace_one({"id": id}, src.model_dump())
     return src
 
@@ -235,8 +239,8 @@ async def save_copy(source_id: str, body: SheetCopyUpdate):
     prev = await db.sheet_copies.find_one({"source_id": source_id}, {"_id": 0, "rows.origin": 1})
     if prev and len(prev.get("rows", [])) != len(body.rows):
         edited = True
-    copy = SheetCopy(source_id=source_id, columns=body.columns, rows=body.rows, edited=edited,
-                     updated_at=datetime.now(timezone.utc))
+    copy = SheetCopy(source_id=source_id, columns=body.columns, rows=body.rows, qty_column=body.qty_column,
+                     edited=edited, updated_at=datetime.now(timezone.utc))
     return await _store(copy)
 
 
@@ -245,12 +249,96 @@ async def refresh_copy(source_id: str, body: CopyRefreshRequest):
     data = await _original(source_id)
     doc = await db.sheet_copies.find_one({"source_id": source_id}, {"_id": 0})
     if body.mode == "replace" or not doc:
-        copy = await _store(_fresh_copy(source_id, data))
+        fresh = _fresh_copy(source_id, data)
+        qc = (doc or {}).get("qty_column")
+        fresh.qty_column = qc if qc in fresh.columns else None  # keep the quantity-column setting
+        copy = await _store(fresh)
         return CopyRefreshResult(sheet=copy, added=len(copy.rows))
     current = SheetCopy(**doc)
     known = {r.origin for r in current.rows if r.origin}
     new_rows = [CopyRow(cells=r, origin=_sig(r)) for r in data.rows if _sig(r) not in known]
     columns = current.columns + [c for c in data.columns if c not in current.columns]
-    copy = SheetCopy(source_id=source_id, columns=columns, rows=current.rows + new_rows,
+    copy = SheetCopy(source_id=source_id, columns=columns, rows=current.rows + new_rows, qty_column=current.qty_column,
                      edited=current.edited, updated_at=datetime.now(timezone.utc))
     return CopyRefreshResult(sheet=await _store(copy), added=len(new_rows))
+
+
+# ---- Google Sheets tabs (one spreadsheet, many brand tabs)
+
+class SheetTab(BaseModel):
+    name: str
+    gid: str
+    url: str
+
+
+def _google_id(url: str) -> str | None:
+    m = re.search(r"/spreadsheets/d/([a-zA-Z0-9_-]+)", url)
+    return m.group(1) if m and "/d/e/" not in url else None
+
+
+def _gid(url: str) -> str | None:
+    m = re.search(r"[#&?]gid=(\d+)", url)
+    return m.group(1) if m else None
+
+
+async def google_tabs(sheet_id: str) -> List[SheetTab]:
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=20) as client:
+            res = await client.get(f"https://docs.google.com/spreadsheets/d/{sheet_id}/htmlview")
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach Google Sheets: {exc}") from exc
+    items = re.findall(r'items\.push\(\{name:\s*"((?:[^"\\]|\\.)*)",\s*pageUrl:[^}]*?gid:\s*"(\d+)"', res.text)
+    tabs: List[SheetTab] = []
+    for raw, gid in items:
+        name = json.loads(f'"{raw}"')  # unescape \uXXXX / \" sequences
+        tabs.append(SheetTab(name=name, gid=gid, url=f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit#gid={gid}"))
+    return tabs
+
+
+@router.post("/sheets/tabs", response_model=List[SheetTab])
+async def list_tabs(body: SheetFetchRequest):
+    sheet_id = _google_id(body.url)
+    if not sheet_id:
+        raise HTTPException(status_code=400, detail="Not a Google Sheets link")
+    return await google_tabs(sheet_id)
+
+
+@router.post("/sources/{id}/sync-tabs", response_model=List[SheetSource])
+async def sync_tabs(id: str):
+    """Make every tab of this source's Google spreadsheet a saved sheet; returns all tabs in order."""
+    doc = await db.sheet_sources.find_one({"id": id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Source not found")
+    src = SheetSource(**doc)
+    sheet_id = _google_id(src.url)
+    if not sheet_id:
+        if src.workbook:  # uploads are grouped at upload time
+            docs = await db.sheet_sources.find({"workbook": src.workbook}, {"_id": 0}).sort("tab_index", 1).to_list(200)
+            return [SheetSource(**d) for d in docs]
+        return [src]
+    tabs = await google_tabs(sheet_id)
+    if not tabs:
+        return [src]
+    workbook = f"google:{sheet_id}"
+    wb_name = src.workbook_name
+    if not wb_name:
+        try:
+            data = await fetch_sheet(SheetFetchRequest(url=src.url))
+            first = next((t for t in tabs if t.gid == _gid(src.url)), tabs[0])
+            wb_name = re.sub(rf"\s*-\s*{re.escape(first.name)}$", "", data.name) or data.name or "Google Sheet"
+        except HTTPException:
+            wb_name = "Google Sheet"
+    existing = await db.sheet_sources.find({"$or": [{"workbook": workbook}, {"url": {"$regex": re.escape(sheet_id)}}]}, {"_id": 0}).to_list(500)
+    by_gid = {(_gid(e["url"]) or "0"): e for e in existing}
+    out: List[SheetSource] = []
+    for i, tab in enumerate(tabs):
+        meta = {"workbook": workbook, "workbook_name": wb_name, "tab": tab.name, "tab_index": i}
+        hit = by_gid.get(tab.gid)
+        if hit:
+            await db.sheet_sources.update_one({"id": hit["id"]}, {"$set": {**meta, "name": f"{wb_name} — {tab.name}"}})
+            out.append(SheetSource(**{**hit, **meta, "name": f"{wb_name} — {tab.name}"}))
+        else:
+            new = SheetSource(name=f"{wb_name} — {tab.name}", brand=tab.name, url=tab.url, template_id=src.template_id, **meta)
+            await db.sheet_sources.insert_one(new.model_dump())
+            out.append(new)
+    return out

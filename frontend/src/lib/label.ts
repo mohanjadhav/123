@@ -46,7 +46,11 @@ export function autoMapping(placeholders: string[], columns: string[]): Mapping 
   const map: Mapping = {};
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   for (const p of placeholders) {
-    const hit = columns.find((c) => c === p) ?? columns.find((c) => norm(c) === norm(p));
+    const n = norm(p);
+    const hit =
+      columns.find((c) => c === p) ??
+      columns.find((c) => norm(c) === n) ??
+      (n.length >= 3 ? columns.find((c) => norm(c).includes(n) || (norm(c).length >= 3 && n.includes(norm(c)))) : undefined);
     if (hit) map[p] = hit;
   }
   return map;
@@ -64,6 +68,9 @@ export function newElement(type: LabelElement["type"], tpl: TemplateBase): Label
     font_family: "IBM Plex Sans",
     font_size: 10,
     font_weight: 500,
+    italic: false,
+    underline: false,
+    strike: false,
     align: "left",
     color: "#0F0F10",
     fill: "transparent",

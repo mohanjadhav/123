@@ -14,6 +14,9 @@ export interface LabelElement {
   font_family: string;
   font_size: number;
   font_weight: number;
+  italic: boolean;
+  underline: boolean;
+  strike: boolean;
   align: Align;
   color: string;
   fill: string;
@@ -33,6 +36,7 @@ export interface TemplateBase {
   height_mm: number;
   background: string;
   elements: LabelElement[];
+  source_id: string | null;
 }
 
 export interface Template extends TemplateBase {

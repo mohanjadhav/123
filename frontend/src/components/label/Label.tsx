@@ -29,6 +29,8 @@ function ElementBody({ el, row, mapping }: ElementProps) {
             fontFamily: FONTS[el.font_family] ?? el.font_family,
             fontSize: `${el.font_size}pt`,
             fontWeight: el.font_weight,
+            fontStyle: el.italic ? "italic" : undefined,
+            textDecoration: [el.underline && "underline", el.strike && "line-through"].filter(Boolean).join(" ") || undefined,
             textAlign: el.align,
             color: el.color,
           }}

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Download, Upload } from "lucide-react";
+import { FileSpreadsheet, Link2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +9,8 @@ import { fetchSheet } from "@/lib/label";
 import type { SheetSource } from "@/lib/types";
 
 /** Paste a Google Sheets/CSV link or upload a CSV/XLSX — every import is saved as a sheet source. */
-export function SheetImporter({ sources, templateId, onImported }: {
+export function SheetImporter({ sources, onImported }: {
   sources: SheetSource[];
-  templateId?: string | null;
   onImported: (created: SheetSource[]) => void;
 }) {
   const qc = useQueryClient();
@@ -28,14 +27,14 @@ export function SheetImporter({ sources, templateId, onImported }: {
         name: data.name || `Google Sheet ${sources.length + 1}`,
         brand: "General",
         url: link,
-        template_id: templateId || null,
+        template_id: null,
       });
       return [src];
     },
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["sources"] });
       setUrl("");
-      toast.success(`Sheet "${created[0].name}" saved`);
+      toast.success(`Sheet "${created[0].name}" connected`);
       onImported(created);
     },
     onError: (err) => toast.error(apiErrorDetail(err, "Could not load that sheet")),
@@ -62,34 +61,34 @@ export function SheetImporter({ sources, templateId, onImported }: {
   const busy = loadLink.isPending || upload.isPending;
 
   return (
-    <div className="grid gap-2" data-testid="sheet-importer">
-      <div className="flex gap-1.5">
-        <Input data-testid="google-sheets-input-url" value={url} onChange={(e) => setUrl(e.target.value)}
-          placeholder="Paste Google Sheet link" className="h-9 text-xs" onKeyDown={(e) => e.key === "Enter" && submit()} />
-        <Button size="icon" variant="outline" data-testid="google-sheets-fetch-button" onClick={submit} disabled={busy} title="Load & save sheet">
-          <Download />
-        </Button>
+    <div className="grid gap-4" data-testid="sheet-importer">
+      <div className="grid gap-2">
+        <p className="flex items-center gap-2 text-sm font-medium text-[#1F2937]">
+          <FileSpreadsheet className="size-4 text-[#188038]" /> Google Sheet link
+        </p>
+        <div className="flex gap-2">
+          <Input data-testid="google-sheets-input-url" value={url} onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://docs.google.com/spreadsheets/d/…" className="h-9 bg-white text-xs"
+            onKeyDown={(e) => e.key === "Enter" && submit()} />
+          <Button data-testid="google-sheets-fetch-button" onClick={submit} disabled={busy} className="h-9 bg-[#1A73E8] text-white hover:bg-[#1765CC]">
+            <Link2 /> {loadLink.isPending ? "Connecting…" : "Connect"}
+          </Button>
+        </div>
+        <p className="text-[11px] leading-relaxed text-[#6B7280]">
+          In Google Sheets click <b>Share → Anyone with the link → Viewer</b>, then copy the link of the tab you want. The sheet is remembered — use <b>Refresh</b> to pull new rows.
+        </p>
       </div>
-      <input ref={fileRef} type="file" accept=".csv,.tsv,.xlsx,.xlsm" className="hidden" data-testid="sheet-upload-input"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ""; }} />
-      <Button variant="outline" size="sm" data-testid="sheet-upload-button" disabled={busy} onClick={() => fileRef.current?.click()}>
-        <Upload /> {upload.isPending ? "Uploading…" : "Upload CSV / Excel file"}
-      </Button>
-      {busy && <p className="text-xs text-neutral-400" data-testid="sheet-import-status">Importing sheet…</p>}
-    </div>
-  );
-}
-
-/** Column headers rendered as {{variables}}. */
-export function VariableChips({ columns, onPick }: { columns: string[]; onPick: (col: string) => void }) {
-  return (
-    <div className="flex flex-wrap gap-1.5" data-testid="column-chips">
-      {columns.map((c) => (
-        <button key={c} data-testid={`column-chip-${c}`} onClick={() => onPick(c)} title={`Insert {{${c}}}`}
-          className="rounded border border-[#3F4858] bg-[#1F242C] px-2 py-1 font-mono text-[11px] text-[#06B6D4] transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-[#06B6D4]">
-          {`{{${c}}}`}
-        </button>
-      ))}
+      <div className="flex items-center gap-3 text-[11px] text-[#9CA3AF]">
+        <span className="h-px flex-1 bg-[#E5E7EB]" /> or <span className="h-px flex-1 bg-[#E5E7EB]" />
+      </div>
+      <div className="grid gap-1.5">
+        <input ref={fileRef} type="file" accept=".csv,.tsv,.xlsx,.xlsm" className="hidden" data-testid="sheet-upload-input"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ""; }} />
+        <Button variant="outline" data-testid="sheet-upload-button" disabled={busy} onClick={() => fileRef.current?.click()} className="h-9 bg-white">
+          <Upload /> {upload.isPending ? "Uploading…" : "Upload CSV / Excel file"}
+        </Button>
+        <p className="text-[11px] text-[#6B7280]">Excel files with several tabs become one sheet per tab (great for multiple brands).</p>
+      </div>
     </div>
   );
 }

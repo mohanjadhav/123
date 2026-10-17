@@ -23,6 +23,9 @@ class LabelElement(BaseModel):
     font_family: str = "IBM Plex Sans"
     font_size: float = 10  # pt
     font_weight: int = 500
+    italic: bool = False
+    underline: bool = False
+    strike: bool = False
     align: Literal["left", "center", "right"] = "left"
     color: str = "#0F0F10"
     fill: str = "transparent"
@@ -40,8 +43,9 @@ class TemplateBase(BaseModel):
     brand: str = "General"
     width_mm: float = Field(gt=0, le=400)
     height_mm: float = Field(gt=0, le=400)
-    background: str = "#FDFDFC"
+    background: str = "#FFFFFF"
     elements: List[LabelElement] = []
+    source_id: Optional[str] = None  # remembered print-data sheet
 
 
 class Template(TemplateBase):

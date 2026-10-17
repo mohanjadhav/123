@@ -7,16 +7,17 @@ import { toast } from "sonner";
 import { SheetImporter } from "@/components/SheetImporter";
 import { Canvas } from "@/components/workspace/Canvas";
 import { DataGrid } from "@/components/workspace/DataGrid";
-import type { GridSelection } from "@/components/workspace/DataGrid";
 import { Inspector } from "@/components/workspace/Inspector";
 import { NewLabelDialog, OpenLabelDialog } from "@/components/workspace/LabelDialogs";
 import { LeftPanel } from "@/components/workspace/LeftPanel";
 import type { Tool } from "@/components/workspace/LeftPanel";
 import { PrintPortal, PrintPreviewDialog } from "@/components/workspace/PrintPreview";
+import { RefreshDialog } from "@/components/workspace/RefreshDialog";
+import { useSheetCopy } from "@/lib/useSheetCopy";
 import type { PrintLayout } from "@/components/workspace/PrintPreview";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiDelete, apiErrorDetail, apiPost, apiPut } from "@/lib/api";
-import { autoMapping, fetchSheet, fetchSources, fetchTemplates, MM_TO_PX, newElement, placeholdersOf } from "@/lib/label";
+import { autoMapping, fetchSources, fetchTemplates, MM_TO_PX, newElement, placeholdersOf } from "@/lib/label";
 import type { LabelElement, Row, SheetSource, Template, TemplateBase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -65,9 +66,8 @@ export default function Workspace() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [zooms, setZooms] = useState<Record<string, number>>({});
   const [layout, setLayout] = useState<PrintLayout>(() => load("bc.layout", { mode: "roll", margin: 8, gap: 3 }));
-  const [selection, setSelection] = useState<GridSelection>({ key: "", excluded: new Set(), qty: {} });
   const [printJob, setPrintJob] = useState<{ rows: Row[]; single: boolean } | null>(null);
-  const [dialog, setDialog] = useState<null | "new" | "open" | "import" | "preview">(null);
+  const [dialog, setDialog] = useState<null | "new" | "open" | "import" | "preview" | "refresh">(null);
   const [gridCollapsed, setGridCollapsed] = useState(false);
 
   // Tabs: only templates that still exist; default to the newest template.
@@ -186,15 +186,18 @@ export default function Workspace() {
   };
   const onImported = (created: SheetSource[]) => { linkSource(created[0].id); setDialog(null); setGridCollapsed(false); };
 
-  const sheet = useQuery({ queryKey: ["sheet", source?.url], queryFn: () => fetchSheet(source!.url), enabled: !!source, retry: false });
-  const columns = useMemo(() => (sheet.isError ? [] : (sheet.data?.columns ?? [])), [sheet.data, sheet.isError]);
-  const rows = useMemo(() => (sheet.isError ? [] : (sheet.data?.rows ?? [])), [sheet.data, sheet.isError]);
-  const sel: GridSelection = selection.key === (source?.url ?? "") ? selection : { key: source?.url ?? "", excluded: new Set(), qty: {} };
+  // Print data = the app's editable copy of the sheet (shared with the Sheet Data page; never written to Google).
+  const { query: copyQ, copy, update: updateCopy, refresh: refreshCopy } = useSheetCopy(source?.id ?? null);
+  const columns = useMemo(() => copy?.columns ?? [], [copy]);
+  const copyRows = useMemo(() => copy?.rows ?? [], [copy]);
+  const rows = useMemo(() => copyRows.map((r) => r.cells), [copyRows]);
+  const canRefresh = !!source && !source.url.startsWith("upload:") && source.url !== "sample";
+  const onRefresh = () => (copy?.edited ? setDialog("refresh") : refreshCopy.mutate("replace"));
   const placeholders = useMemo(() => (tpl ? placeholdersOf(tpl) : []), [tpl]);
   const mapping = useMemo(() => autoMapping(placeholders, columns), [placeholders, columns]);
   const missing = columns.length ? placeholders.filter((p) => !mapping[p]) : [];
-  const printRows = rows.flatMap((r, i) => (sel.excluded.has(i) ? [] : Array.from({ length: sel.qty[i] ?? 1 }, () => r)));
-  const previewRow = rows.find((_, i) => !sel.excluded.has(i)) ?? rows[0] ?? null;
+  const printRows = copyRows.flatMap((r) => (r.selected ? Array.from({ length: r.qty }, () => r.cells) : []));
+  const previewRow = copyRows.find((r) => r.selected)?.cells ?? rows[0] ?? null;
 
   const runPrint = (list: Row[], single = false) => {
     if (!tpl) return;
@@ -303,11 +306,14 @@ export default function Workspace() {
             </aside>
           </div>
           <DataGrid sources={sources} activeSourceId={source?.id ?? null} onChooseSource={linkSource} onDeleteSource={(id) => deleteSource.mutate(id)}
-            columns={columns} rows={rows} loading={sheet.isFetching} error={sheet.isError ? apiErrorDetail(sheet.error, "Could not load sheet") : null}
-            canRefresh={!!source && !source.url.startsWith("upload:") && source.url !== "sample"} onRefresh={() => sheet.refetch().then(() => toast.success("Sheet refreshed"))}
-            onOpenImport={() => setDialog("import")} selection={sel} onSelection={setSelection}
+            columns={columns} rows={copyRows} edited={!!copy?.edited} loading={copyQ.isFetching} error={copyQ.isError ? apiErrorDetail(copyQ.error, "Could not load sheet") : null}
+            canRefresh={canRefresh} refreshing={refreshCopy.isPending} onRefresh={onRefresh}
+            onOpenImport={() => setDialog("import")}
+            onToggle={(ids, on) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (ids.includes(r.id) ? { ...r, selected: on } : r)) }))}
+            onQty={(id, qty) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (r.id === id ? { ...r, qty } : r)) }))}
+            onEditData={() => { if (draft?.dirty) save.mutate(); }}
             onPrintRow={(r) => runPrint([r], true)} onPreview={() => setDialog("preview")} onPrint={() => runPrint(printRows)}
-            collapsed={gridCollapsed} onToggle={() => setGridCollapsed((c) => !c)} />
+            collapsed={gridCollapsed} onCollapse={() => setGridCollapsed((c) => !c)} />
         </div>
       ) : (
         <div className="grid flex-1 place-items-center" data-testid="workspace-empty">
@@ -331,6 +337,8 @@ export default function Workspace() {
           <SheetImporter sources={sources} onImported={onImported} />
         </DialogContent>
       </Dialog>
+      <RefreshDialog open={dialog === "refresh"} onOpenChange={(o) => setDialog(o ? "refresh" : null)} pending={refreshCopy.isPending}
+        onChoose={(mode) => refreshCopy.mutate(mode, { onSuccess: () => setDialog(null) })} />
       {tpl && (
         <PrintPreviewDialog open={dialog === "preview"} onOpenChange={(o) => setDialog(o ? "preview" : null)} template={tpl} rows={printRows} mapping={mapping}
           missing={missing} layout={layout} onLayout={setLayout} onPrint={() => runPrint(printRows)} />

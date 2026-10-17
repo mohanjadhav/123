@@ -12,7 +12,13 @@ import openpyxl
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from lib.db import db
-from models.labels import SheetData, SheetFetchRequest, SheetSource, SheetSourceCreate
+import json
+from datetime import datetime, timezone
+
+from models.labels import (
+    CopyRefreshRequest, CopyRefreshResult, CopyRow, SheetCopy, SheetCopyUpdate,
+    SheetData, SheetFetchRequest, SheetSource, SheetSourceCreate,
+)
 
 router = APIRouter(tags=["sheets"])
 
@@ -185,5 +191,66 @@ async def delete_source(id: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Source not found")
     await db.sheet_sources.delete_one({"id": id})
+    await db.sheet_copies.delete_one({"source_id": id})
     if doc["url"].startswith("upload:"):
         await db.sheet_uploads.delete_one({"id": doc["url"][7:]})
+
+
+# ---- Editable in-app copy of a sheet. Edits never touch the original Google Sheet / file.
+
+def _sig(cells: dict) -> str:
+    return json.dumps(cells, sort_keys=True, ensure_ascii=False)
+
+
+async def _original(source_id: str) -> SheetData:
+    src = await db.sheet_sources.find_one({"id": source_id}, {"_id": 0})
+    if not src:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return await fetch_sheet(SheetFetchRequest(url=src["url"]))
+
+
+def _fresh_copy(source_id: str, data: SheetData) -> SheetCopy:
+    rows = [CopyRow(cells=r, origin=_sig(r)) for r in data.rows]
+    return SheetCopy(source_id=source_id, columns=data.columns, rows=rows)
+
+
+async def _store(copy: SheetCopy) -> SheetCopy:
+    await db.sheet_copies.replace_one({"source_id": copy.source_id}, copy.model_dump(), upsert=True)
+    return copy
+
+
+@router.get("/sheets/copy/{source_id}", response_model=SheetCopy)
+async def get_copy(source_id: str):
+    doc = await db.sheet_copies.find_one({"source_id": source_id}, {"_id": 0})
+    if doc:
+        return SheetCopy(**doc)
+    return await _store(_fresh_copy(source_id, await _original(source_id)))
+
+
+@router.put("/sheets/copy/{source_id}", response_model=SheetCopy)
+async def save_copy(source_id: str, body: SheetCopyUpdate):
+    if not await db.sheet_sources.find_one({"id": source_id}):
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    edited = any(r.origin is None or r.origin != _sig(r.cells) for r in body.rows)
+    prev = await db.sheet_copies.find_one({"source_id": source_id}, {"_id": 0, "rows.origin": 1})
+    if prev and len(prev.get("rows", [])) != len(body.rows):
+        edited = True
+    copy = SheetCopy(source_id=source_id, columns=body.columns, rows=body.rows, edited=edited,
+                     updated_at=datetime.now(timezone.utc))
+    return await _store(copy)
+
+
+@router.post("/sheets/copy/{source_id}/refresh", response_model=CopyRefreshResult)
+async def refresh_copy(source_id: str, body: CopyRefreshRequest):
+    data = await _original(source_id)
+    doc = await db.sheet_copies.find_one({"source_id": source_id}, {"_id": 0})
+    if body.mode == "replace" or not doc:
+        copy = await _store(_fresh_copy(source_id, data))
+        return CopyRefreshResult(sheet=copy, added=len(copy.rows))
+    current = SheetCopy(**doc)
+    known = {r.origin for r in current.rows if r.origin}
+    new_rows = [CopyRow(cells=r, origin=_sig(r)) for r in data.rows if _sig(r) not in known]
+    columns = current.columns + [c for c in data.columns if c not in current.columns]
+    copy = SheetCopy(source_id=source_id, columns=columns, rows=current.rows + new_rows,
+                     edited=current.edited, updated_at=datetime.now(timezone.utc))
+    return CopyRefreshResult(sheet=await _store(copy), added=len(new_rows))

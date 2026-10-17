@@ -75,3 +75,31 @@ class SheetData(BaseModel):
     rows: List[dict[str, str]]
     csv_url: str
     name: str = ""
+
+
+class CopyRow(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    cells: dict[str, str] = {}
+    qty: int = Field(default=1, ge=1, le=9999)
+    selected: bool = True
+    origin: Optional[str] = None  # signature of the Google/original row it came from (None = added in app)
+
+
+class SheetCopyUpdate(BaseModel):
+    columns: List[str]
+    rows: List[CopyRow]
+
+
+class SheetCopy(SheetCopyUpdate):
+    source_id: str
+    edited: bool = False
+    updated_at: datetime = Field(default_factory=_now)
+
+
+class CopyRefreshRequest(BaseModel):
+    mode: Literal["replace", "merge"]
+
+
+class CopyRefreshResult(BaseModel):
+    sheet: SheetCopy
+    added: int

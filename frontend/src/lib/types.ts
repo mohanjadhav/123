@@ -66,3 +66,28 @@ export interface SheetData {
 
 export type Row = Record<string, string>;
 export type Mapping = Record<string, string>; // placeholder -> column
+
+// Editable in-app copy of a sheet (backend SheetCopy). Edits never reach Google.
+export interface CopyRow {
+  id: string;
+  cells: Record<string, string>;
+  qty: number;
+  selected: boolean;
+  origin: string | null;
+}
+
+export interface SheetCopyUpdate {
+  columns: string[];
+  rows: CopyRow[];
+}
+
+export interface SheetCopy extends SheetCopyUpdate {
+  source_id: string;
+  edited: boolean;
+  updated_at: string;
+}
+
+export interface CopyRefreshResult {
+  sheet: SheetCopy;
+  added: number;
+}

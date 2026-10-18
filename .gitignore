@@ -92,3 +92,8 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Windows desktop build output
+desktop/build/
+desktop/Output/
+/dist/

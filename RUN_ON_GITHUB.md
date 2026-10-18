@@ -1,5 +1,30 @@
 # RAPID LABELS by MOHAN — run it free on GitHub
 
+## ⭐ Install as Windows software (Windows 10 / 11, 64-bit)
+
+GitHub builds a normal Windows installer for you, free, every time the code is saved to GitHub.
+
+1. Put this project on GitHub (in Emergent: **Save → Save to GitHub**).
+2. Open the repository on github.com → **Actions** tab. The job **"Build Windows installer"** starts by itself
+   (or click it → **Run workflow** to build now). It takes about 10–15 minutes.
+   *First time only:* if Actions asks, click **"I understand my workflows, enable them"*.
+3. When it shows a green ✓, open the repository's **Releases** (right side of the main page) →
+   latest **RAPID LABELS v1.0.x** → download **RapidLabels-Setup.exe**.
+4. Double-click **RapidLabels-Setup.exe** → Next → Install. No admin password is needed.
+   - Windows may show *"Windows protected your PC"* (the installer isn't code-signed): click **More info → Run anyway**.
+5. Open **RAPID LABELS** from the Start menu or desktop icon. It opens in its own window and works offline.
+   - Prefer Chrome/Edge? Use the Start-menu shortcut **"RAPID LABELS (open in browser)"**.
+
+**Your data** (labels, sheets, images) is saved on the laptop in `%LOCALAPPDATA%\RapidLabels`
+and is kept when you update or uninstall. To update, just install the newer RapidLabels-Setup.exe over the old one.
+Logs for troubleshooting: `%LOCALAPPDATA%\RapidLabels\logs`.
+
+To put your latest labels into the next installer: `cd backend && python export_seed_data.py`, then save to GitHub.
+
+---
+
+## Or run it in the browser with GitHub Codespaces
+
 GitHub runs this app for free with **GitHub Codespaces** (a computer in your browser).
 A personal GitHub account gets about **60 free hours per month** — the app only uses hours while it is open.
 

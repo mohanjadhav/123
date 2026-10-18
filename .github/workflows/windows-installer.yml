@@ -1,0 +1,95 @@
+name: Build Windows installer
+
+# Builds RapidLabels-Setup.exe on a free GitHub Windows machine:
+#  - automatically on every push to main
+#  - manually: Actions tab -> "Build Windows installer" -> "Run workflow"
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # to publish the installer as a GitHub Release
+
+env:
+  MONGODB_VERSION: "7.0.14"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Frontend - build the app screens
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: |
+          corepack enable
+          cd frontend
+          yarn install --frozen-lockfile
+          yarn build
+        shell: bash
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -r desktop/requirements.txt
+
+      - name: Bundle MongoDB (private database)
+        shell: pwsh
+        run: |
+          $zip = "mongodb.zip"
+          Invoke-WebRequest "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-$env:MONGODB_VERSION.zip" -OutFile $zip
+          Expand-Archive $zip -DestinationPath mongo_tmp
+          New-Item -ItemType Directory -Force desktop/build/mongodb | Out-Null
+          Copy-Item (Get-ChildItem mongo_tmp -Recurse -Filter mongod.exe | Select-Object -First 1).FullName desktop/build/mongodb/
+          Get-ChildItem mongo_tmp -Recurse -Filter LICENSE* | Select-Object -First 1 | Copy-Item -Destination desktop/build/mongodb/
+
+      - name: Package RapidLabels.exe
+        run: pyinstaller desktop/rapid_labels.spec --noconfirm
+
+      - name: Smoke test (starts database + server, checks the API answers)
+        shell: pwsh
+        run: |
+          $p = Start-Process dist/RapidLabels/RapidLabels.exe -ArgumentList "--serve-only" -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep 2
+            try { $r = Invoke-WebRequest http://127.0.0.1:47811/api/templates -UseBasicParsing; if ($r.StatusCode -eq 200) { $ok = $true; break } } catch {}
+          }
+          $home_ = Invoke-WebRequest http://127.0.0.1:47811/ -UseBasicParsing
+          Stop-Process -Id $p.Id -Force
+          Get-Content "$env:LOCALAPPDATA/RapidLabels/logs/app.log" -ErrorAction SilentlyContinue | Select-Object -Last 40
+          if (-not $ok -or $home_.Content -notmatch "RAPID LABELS") { throw "Smoke test failed" }
+          Write-Host "Smoke test passed: API and app screen respond"
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+            if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=1.0.${{ github.run_number }}" desktop/installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+
+      - name: Upload installer (Actions artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: RapidLabels-Setup
+          path: desktop/Output/RapidLabels-Setup.exe
+
+      - name: Publish release (easy download page)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: RAPID LABELS v1.0.${{ github.run_number }}
+          body: |
+            Download **RapidLabels-Setup.exe** below, double-click it and follow the steps.
+            Windows 10 (1809+) / Windows 11, 64-bit. Your labels are saved in %LOCALAPPDATA%\RapidLabels.
+          files: desktop/Output/RapidLabels-Setup.exe
+          make_latest: true

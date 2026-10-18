@@ -65,3 +65,10 @@ No auth.
 ## Run on GitHub (Codespaces)
 - `.devcontainer/` (python 3.11 + node 22 + mongo:7 via compose, app shares db network → localhost:27017). `setup.sh` (postCreate): installs deps (skips emergentintegrations), writes backend/.env, runs seed.py + import_seed_data.py. `start.sh` (postStart): uvicorn :8001 + vite :3000. User guide: `RUN_ON_GITHUB.md`.
 - `backend/seed_data/labels.json` = export of templates (+ referenced library images); `import_seed_data.py` inserts missing by id (idempotent). Re-export if labels change before pushing.
+
+## Windows desktop app (installer built by GitHub Actions)
+- `desktop/launcher.py`: starts bundled mongod (127.0.0.1:47812, data %LOCALAPPDATA%\RapidLabels\db, reuses an orphaned one), imports backend `server.app`, mounts the built React app (`frontend_dist`) at "/" AFTER the /api routes (SPA fallback to index.html), seeds (seed.py + import_seed_data.py) on the uvicorn loop, serves 127.0.0.1:47811, opens a pywebview (WebView2) window; `--browser` opens default browser + small "running" window; `--serve-only` for smoke tests. Second launch reuses the running server.
+- `desktop/rapid_labels.spec` (PyInstaller onedir, windowed), `desktop/installer.iss` (Inno Setup, per-user, Start menu + desktop + "open in browser" shortcut), `desktop/requirements.txt` (pins MUST match backend/requirements.txt), `desktop/icon.ico`.
+- `.github/workflows/windows-installer.yml`: on push to main + manual → yarn build → pip → download MongoDB 7.0.14 → pyinstaller → smoke test (--serve-only, API + index) → iscc → artifact + GitHub Release v1.0.<run>.
+- `backend/export_seed_data.py` refreshes `seed_data/labels.json` from the DB.
+- Never `pip install -r desktop/requirements.txt` in the Emergent pod (pyinstaller/pywebview are Windows build-only).

@@ -15,6 +15,16 @@ GitHub builds a normal Windows installer for you, free, every time the code is s
 5. Open **RAPID LABELS** from the Start menu or desktop icon. It opens in its own window and works offline.
    - Prefer Chrome/Edge? Use the Start-menu shortcut **"RAPID LABELS (open in browser)"**.
 
+**Is it safe?** Yes:
+- The installer is built automatically by GitHub from *your* repository's code — nobody else touches it.
+- Each release includes `RapidLabels-Setup.exe.sha256`. To check your download, open PowerShell in your
+  Downloads folder and run `Get-FileHash RapidLabels-Setup.exe` — the number must match the file.
+- Right-click `RapidLabels.exe` → Properties → Details shows publisher **MOHAN** and the version.
+- For public repositories GitHub also adds a signed *build provenance* record (Actions run → Attestations).
+- The "Windows protected your PC / unknown publisher" warning appears only because the app isn't signed with a
+  **paid code-signing certificate**. To remove it, buy one (or use Azure Trusted Signing), then add two repository
+  secrets — `WINDOWS_CERT_PFX` (the .pfx file as base64) and `WINDOWS_CERT_PASSWORD` — and the build signs automatically.
+
 **Your data** (labels, sheets, images) is saved on the laptop in `%LOCALAPPDATA%\RapidLabels`
 and is kept when you update or uninstall. To update, just install the newer RapidLabels-Setup.exe over the old one.
 Logs for troubleshooting: `%LOCALAPPDATA%\RapidLabels\logs`.

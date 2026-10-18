@@ -91,19 +91,21 @@ def start_mongo(port: int) -> subprocess.Popen | None:
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     proc = subprocess.Popen(
         [_mongod_path(), "--dbpath", str(dbpath), "--port", str(port), "--bind_ip", "127.0.0.1",
-         "--logpath", str(LOGS / "mongod.log"), "--logappend"],
+         "--logpath", str(LOGS / "mongod.log"), "--logappend",
+         # small private DB: cap memory, skip telemetry/diagnostics work -> faster start, lighter laptop
+         "--wiredTigerCacheSizeGB", "0.25", "--setParameter", "diagnosticDataCollectionEnabled=false"],
         creationflags=flags,
     )
     import pymongo
-    client = pymongo.MongoClient(f"mongodb://127.0.0.1:{port}", serverSelectionTimeoutMS=500)
-    for _ in range(120):
+    client = pymongo.MongoClient(f"mongodb://127.0.0.1:{port}", serverSelectionTimeoutMS=300)
+    for _ in range(400):
         if proc.poll() is not None:
             raise RuntimeError(f"Database failed to start (see {LOGS / 'mongod.log'})")
         try:
             client.admin.command("ping")
             return proc
         except Exception:
-            time.sleep(0.5)
+            time.sleep(0.15)
     raise RuntimeError("Database did not start in time")
 
 
@@ -186,6 +188,47 @@ def open_ui(url: str, browser: bool) -> None:
     webview.start(private_mode=False, storage_path=storage)
 
 
+SPLASH = """<html><body style="margin:0;height:100vh;display:grid;place-items:center;background:#F3F5F8;font-family:Segoe UI,sans-serif;color:#1F2937">
+<div style="text-align:center">
+  <div style="width:64px;height:64px;margin:0 auto 16px;border-radius:16px;background:#1A73E8;display:grid;place-items:center">
+    <div style="width:34px;height:26px;background:repeating-linear-gradient(90deg,#fff 0 3px,transparent 3px 6px)"></div></div>
+  <div style="font-size:20px;font-weight:600">RAPID LABELS <span style="font-weight:400;color:#6B7280">by MOHAN</span></div>
+  <div id="msg" style="margin-top:10px;font-size:13px;color:#6B7280">Starting…</div>
+  <div style="margin:14px auto 0;width:180px;height:4px;border-radius:2px;background:#DDE3EA;overflow:hidden">
+    <div style="width:40%;height:100%;background:#1A73E8;border-radius:2px;animation:s 1s ease-in-out infinite alternate"></div></div>
+</div><style>@keyframes s{from{margin-left:0}to{margin-left:60%}}</style></body></html>"""
+
+
+def boot(state: dict, app_port: int, db_port: int, url: str, window=None) -> None:
+    """Start database + server; when ready, switch the (already visible) window to the app."""
+    def say(text: str):
+        if window is not None:
+            try:
+                window.evaluate_js(f"document.getElementById('msg').textContent = {text!r}")
+            except Exception:
+                pass
+    try:
+        say("Starting database…")
+        state["mongo"] = start_mongo(db_port)
+        say("Loading your labels…")
+        app = build_app()
+        state["srv"], state["thread"] = run_server(app, app_port)
+        for _ in range(300):
+            if _app_alive(url):
+                break
+            time.sleep(0.1)
+        print("running at", url)
+        if window is not None:
+            window.load_url(url)
+    except Exception as exc:  # show the problem in the window instead of a silent failure
+        import traceback
+        traceback.print_exc()
+        state["error"] = exc
+        if window is not None:
+            window.load_html(f"<body style='font-family:Segoe UI;padding:24px'><h3>{APP_NAME} could not start</h3><p>{exc}</p>"
+                             f"<p style='color:#6B7280'>Log files: {LOGS}</p></body>")
+
+
 def main() -> None:
     _log_to_file()
     _load_build_info()
@@ -211,31 +254,32 @@ def main() -> None:
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, _term)  # e.g. Windows shutdown / task kill -> still stop the database cleanly
-    mongo = start_mongo(db_port)
-    srv = None
+    state: dict = {}
     try:
-        app = build_app()
-        srv, thread = run_server(app, app_port)
-        for _ in range(150):
-            if _app_alive(url):
-                break
-            time.sleep(0.2)
-        print("running at", url)
-        if serve_only:
-            try:
-                while thread.is_alive():
+        if serve_only or browser:
+            boot(state, app_port, db_port, url)
+            if "error" in state:
+                raise state["error"]
+            if serve_only:
+                while state["thread"].is_alive():
                     time.sleep(0.5)
-            except KeyboardInterrupt:
-                pass
+            else:
+                open_ui(url, browser=True)  # small "running" window; blocks until closed
         else:
-            open_ui(url, browser)  # blocks until the window is closed
+            # window appears instantly with a loading screen; servers start behind it
+            import webview
+            webview.settings["ALLOW_DOWNLOADS"] = True
+            webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
+            win = webview.create_window(APP_NAME, html=SPLASH, width=1440, height=900, min_size=(1024, 640), maximized=True, text_select=True)
+            webview.start(boot, (state, app_port, db_port, url, win), private_mode=False, storage_path=str(DATA / "webview"))
     except KeyboardInterrupt:
         pass
     finally:
-        if srv:
-            srv.should_exit = True
-            time.sleep(0.5)
-        stop_mongo(mongo, db_port)
+        if state.get("srv"):
+            state["srv"].should_exit = True
+            time.sleep(0.3)
+        if "mongo" in state:
+            stop_mongo(state["mongo"], db_port)
         print("stopped")
 
 

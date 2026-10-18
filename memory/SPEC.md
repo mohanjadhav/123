@@ -97,3 +97,9 @@ No auth.
 - Tabs persistence fix: Workspace waits for `templatesQ.isSuccess` before filtering/persisting `bc.openTabs` / `bc.activeTab` (previously the empty list during loading wiped them). On open: last active label + its linked sheet (template.source_id) reopen; if none survive, the most recently edited label opens.
 - GET /api/templates skips (logs) invalid docs instead of failing the whole list; toasts show the server's error detail (apiErrorDetail handles FastAPI validation lists).
 - Rename / re-brand from Open label cards: pencil (rename-template-<id>) or double-click the name → inline name + brand inputs (brand suggestions = existing brands, Enter saves, Esc cancels, empty name blocked). Workspace `rename` mutation PUTs the stored label with only name/brand changed (unsaved design edits stay as draft) and updates the open tab's draft name/brand.
+
+## Windows app: safety + speed (latest)
+- Launcher: window opens instantly with a loading screen (SPLASH) and `boot()` starts mongod + server in the background via `webview.start(boot, …)`, then `window.load_url`; startup errors are shown in the window. `--browser` / `--serve-only` unchanged. mongod runs with `--wiredTigerCacheSizeGB 0.25` and diagnosticDataCollection off; faster readiness polling.
+- PyInstaller: optimize=1, excludes tests/unused libs (scipy, PIL, numpy/pandas tests, sqlalchemy, pyarrow, IPython…), Windows version resource from `desktop/version_info.template.txt` (filled by the workflow → desktop/build/version_info.txt; skipped if absent).
+- Workflow: optional signtool signing when secrets WINDOWS_CERT_PFX/WINDOWS_CERT_PASSWORD exist (job env HAS_CERT), SHA-256 checksum file published with the release, `actions/attest-build-provenance` (continue-on-error: private repos on free plans can't attest).
+- Frontend: SheetData / PrintQueue / History are lazy-loaded routes (React.lazy + Suspense) so the designer bundle is smaller.

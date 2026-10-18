@@ -35,8 +35,11 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
-    excludes=["emergentintegrations", "tkinter", "matplotlib", "pytest"],
+    # leave out tests & unused libraries: smaller install, fewer files for antivirus to scan -> faster first start
+    excludes=["emergentintegrations", "tkinter", "matplotlib", "pytest", "IPython", "notebook", "scipy", "PIL",
+              "pandas.tests", "numpy.tests", "numpy.f2py", "sqlalchemy", "pyarrow"],
     noarchive=False,
+    optimize=1,  # pre-optimised bytecode
 )
 pyz = PYZ(a.pure)
 exe = EXE(
@@ -46,6 +49,8 @@ exe = EXE(
     exclude_binaries=True,
     name="RapidLabels",
     icon=str(ROOT / "desktop" / "icon.ico"),
+    # publisher / product details shown by Windows (written by the GitHub build)
+    version=str(ROOT / "desktop" / "build" / "version_info.txt") if (ROOT / "desktop" / "build" / "version_info.txt").exists() else None,
     console=False,
     upx=False,
 )

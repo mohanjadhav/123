@@ -9,10 +9,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # to publish the installer as a GitHub Release
+  contents: write      # publish the installer as a GitHub Release
+  id-token: write      # build-provenance attestation (proves the file was built from this repository)
+  attestations: write
 
 env:
   MONGODB_VERSION: "7.0.14"
+  HAS_CERT: ${{ secrets.WINDOWS_CERT_PFX != '' }}
 
 jobs:
   windows:
@@ -52,6 +55,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force desktop/build | Out-Null
           '{"version": "1.0.${{ github.run_number }}", "repo": "${{ github.repository }}"}' | Set-Content -Encoding utf8NoBOM desktop/build/app.json
+          # Windows file details (Properties > Details): publisher, product, version
+          $v = "1.0.${{ github.run_number }}.0"; $t = "(1, 0, ${{ github.run_number }}, 0)"
+          (Get-Content desktop/version_info.template.txt) -replace '__VERSION__', $v -replace '__TUPLE__', $t | Set-Content -Encoding utf8 desktop/build/version_info.txt
 
       - name: Package RapidLabels.exe
         run: pyinstaller desktop/rapid_labels.spec --noconfirm
@@ -83,6 +89,34 @@ jobs:
           & $iscc "/DAppVersion=1.0.${{ github.run_number }}" desktop/installer.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
+      # Optional code signing: add repository secrets WINDOWS_CERT_PFX (base64 of your .pfx) and
+      # WINDOWS_CERT_PASSWORD to remove the "unknown publisher" warning. Skipped when not set.
+      - name: Sign installer (only if a certificate is configured)
+        if: env.HAS_CERT == 'true'
+        env:
+          CERT: ${{ secrets.WINDOWS_CERT_PFX }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          [IO.File]::WriteAllBytes("cert.pfx", [Convert]::FromBase64String($env:CERT))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -match "x64" | Select-Object -Last 1
+          & $signtool.FullName sign /f cert.pfx /p $env:CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 desktop/Output/RapidLabels-Setup.exe
+          Remove-Item cert.pfx
+
+      - name: Checksum (SHA-256)
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash desktop/Output/RapidLabels-Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  RapidLabels-Setup.exe" | Set-Content -Encoding ascii desktop/Output/RapidLabels-Setup.exe.sha256
+          Write-Host "SHA-256: $h"
+
+      - name: Prove where the installer came from (GitHub attestation)
+        # free for public repositories; private repositories on free plans skip this without failing the build
+        continue-on-error: true
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: desktop/Output/RapidLabels-Setup.exe
+
       - name: Upload installer (Actions artifact)
         uses: actions/upload-artifact@v4
         with:
@@ -97,5 +131,12 @@ jobs:
           body: |
             Download **RapidLabels-Setup.exe** below, double-click it and follow the steps.
             Windows 10 (1809+) / Windows 11, 64-bit. Your labels are saved in %LOCALAPPDATA%\RapidLabels.
-          files: desktop/Output/RapidLabels-Setup.exe
+
+            **Is it safe?** This file was built automatically by GitHub from this repository's code
+            (see the "Attestations" / provenance badge on the Actions run), and its SHA-256 checksum is
+            in `RapidLabels-Setup.exe.sha256`. If Windows SmartScreen says "unknown publisher",
+            click **More info → Run anyway** (the app is not code-signed with a paid certificate).
+          files: |
+            desktop/Output/RapidLabels-Setup.exe
+            desktop/Output/RapidLabels-Setup.exe.sha256
           make_latest: true

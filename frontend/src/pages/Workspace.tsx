@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useHistorySummary, useRecordPrint } from "@/lib/history";
-import { barcodeColumns, findDuplicates, useDuplicateGuard } from "@/components/workspace/DuplicateGuard";
+import { barcodeColumns, duplicateCells, findDuplicates, useDuplicateGuard } from "@/components/workspace/DuplicateGuard";
 import { BarcodeGenerator } from "@/components/workspace/BarcodeGenerator";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
@@ -233,6 +233,7 @@ export default function Workspace() {
   const recordPrint = useRecordPrint();
   const history = useHistorySummary();
   const dupGuard = useDuplicateGuard();
+  const dupCells = useMemo(() => duplicateCells(copyRows, tpl ? barcodeColumns(tpl.elements, mapping, columns) : []), [copyRows, tpl, mapping, columns]);
   const [genOpen, setGenOpen] = useState(false);
   const runPrint = (list: Row[], single = false) => {
     if (!tpl) return;
@@ -401,7 +402,7 @@ export default function Workspace() {
             qtyColumn={qtyColumn} onQtyColumn={(col) => updateCopy((c) => ({ ...c, qty_column: col, rows: tickByQty(c.rows, col) }))}
             onQty={(id, qty) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (r.id === id ? withQty(r, qty, c.qty_column) : r)) }))}
             onEditData={() => { if (draft?.dirty) save.mutate(); }}
-            onPrintRow={(r) => runPrint([r], true)} onPreview={() => setDialog("preview")} onPrint={() => runPrint(printRows)} onQueue={queueTicked} onGenerate={() => setGenOpen(true)}
+            onPrintRow={(r) => runPrint([r], true)} onPreview={() => setDialog("preview")} onPrint={() => runPrint(printRows)} onQueue={queueTicked} onGenerate={() => setGenOpen(true)} dupCells={dupCells}
             collapsed={gridCollapsed} onCollapse={() => setGridCollapsed((c) => !c)} />
         </div>
       ) : (

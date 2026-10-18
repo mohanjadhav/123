@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import { useRecordPrint } from "@/lib/history";
+import { findQueueDuplicates, useDuplicateGuard } from "@/components/workspace/DuplicateGuard";
 import { flushSync } from "react-dom";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -65,8 +66,16 @@ export default function PrintQueue() {
   const toggleAll = () => jobs.forEach((j) => j.selected === allOn && patch.mutate({ id: j.id, body: { selected: !allOn } }));
 
   const recordPrint = useRecordPrint();
+  const dupGuard = useDuplicateGuard();
   const runPrint = () => {
     if (!parts.length) return toast.error("Tick at least one job with labels to print");
+    const dups = findQueueDuplicates(printable.map((j) => {
+      const tpl = tplOf(j)!;
+      return { label: `${j.source_name || "No sheet"} (${j.template_name})`, elements: tpl.elements, mapping: parts.find((p) => p.key === j.id)!.mapping, items: j.items };
+    }));
+    dupGuard.guard(dups, printNow);
+  };
+  const printNow = () => {
     flushSync(() => setPrinting(parts));
     window.print();
     setPrinting(null);
@@ -234,6 +243,7 @@ export default function PrintQueue() {
         </DialogContent>
       </Dialog>
       {printing && <BatchPrintPortal parts={printing} />}
+      {dupGuard.dialog}
     </div>
   );
 }

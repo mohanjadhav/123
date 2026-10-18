@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 const NONE = "__none__";
 
 export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSource, columns, rows, edited, loading, error, canRefresh, refreshing, onRefresh, onOpenImport,
-  onToggle, onQty, qtyColumn, onQtyColumn, onPrintRow, onPreview, onPrint, onQueue, onGenerate, collapsed, onCollapse, onEditData }: {
+  onToggle, onQty, qtyColumn, onQtyColumn, onPrintRow, onPreview, onPrint, onQueue, onGenerate, dupCells, collapsed, onCollapse, onEditData }: {
   sources: SheetSource[];
   activeSourceId: string | null;
   onChooseSource: (id: string | null) => void;
@@ -38,6 +38,7 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
   onPreview: () => void;
   onPrint: () => void;
   onGenerate: () => void;
+  dupCells: Record<string, Set<string>>; // barcode values used in 2+ rows (shown red)
   onQueue: () => void;
   collapsed: boolean;
   onCollapse: () => void;
@@ -157,7 +158,13 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
                     <td className="border-b border-r border-[#EEF0F2] px-1 py-0.5">
                       <QtyStepper value={rowQty(r, qtyColumn)} auto={!!qtyColumn} testId={`row-qty-${i}`} onChange={(n) => onQty(r.id, n)} />
                     </td>
-                    {columns.map((c) => <td key={c} title={r.cells[c]} className="truncate border-b border-r border-[#EEF0F2] px-2 py-1">{r.cells[c]}</td>)}
+                    {columns.map((c) => {
+                      const dup = !!dupCells[c]?.has((r.cells[c] ?? "").trim());
+                      return (
+                        <td key={c} data-testid={`grid-cell-${i}-${c}`} data-duplicate={dup || undefined} title={dup ? `Duplicate barcode — "${r.cells[c]}" is used in another row` : r.cells[c]}
+                          className={cn("truncate border-b border-r border-[#EEF0F2] px-2 py-1", dup && "bg-[#FDECEA] font-medium text-[#C5221F] shadow-[inset_3px_0_0_#D93025]")}>{r.cells[c]}</td>
+                      );
+                    })}
                     <td className="border-b border-[#EEF0F2] px-1 text-center">
                       <Button variant="ghost" size="icon-xs" title="Print just this label" data-testid={`print-row-${i}`} onClick={() => onPrintRow(r.cells)}><Printer /></Button>
                     </td>

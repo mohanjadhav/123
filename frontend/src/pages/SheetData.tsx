@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useRecordPrint } from "@/lib/history";
 import { BarcodeGenerator } from "@/components/workspace/BarcodeGenerator";
-import { barcodeColumns, findDuplicates, useDuplicateGuard } from "@/components/workspace/DuplicateGuard";
+import { barcodeColumns, duplicateCells, findDuplicates, isDupCell, useDuplicateGuard } from "@/components/workspace/DuplicateGuard";
 import { flushSync } from "react-dom";
 import type { KeyboardEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -86,6 +86,8 @@ export default function SheetData() {
     rows: c.rows.map((r) => (values[r.id] ? { ...r, cells: { ...r.cells, [col]: values[r.id] } } : isNew ? { ...r, cells: { ...r.cells, [col]: "" } } : r)),
   }));
   const dupGuard = useDuplicateGuard();
+  const dupCells = useMemo(() => duplicateCells(rows, tpl ? barcodeColumns(tpl.elements, mapping, columns) : columns.filter((c) => /barcode|ean|gtin|upc/i.test(c))), [rows, tpl, mapping, columns]);
+  const dupCount = Object.values(dupCells).reduce((n, s) => n + s.size, 0);
   const runPrint = () => {
     if (!tpl) return toast.error("Create a label in the designer first");
     if (!printRows.length) return toast.error("Tick at least one row to print");
@@ -185,7 +187,13 @@ export default function SheetData() {
           <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[#9CA3AF]" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search rows" data-testid="sheet-data-search" className="h-8 w-36 bg-white pl-7 text-xs xl:w-52" />
         </div>
-        <span className="ml-auto whitespace-nowrap text-xs text-[#4B5563]" data-testid="sheet-data-stats">
+        {dupCount > 0 && (
+          <span className="ml-auto flex items-center gap-1 whitespace-nowrap rounded-full bg-[#FDECEA] px-2.5 py-1 text-xs font-medium text-[#C5221F]" data-testid="duplicate-count-chip"
+            title={`Repeated: ${Object.values(dupCells).flatMap((s) => [...s]).slice(0, 10).join(", ")}`}>
+            ⚠ {dupCount} duplicate barcode{dupCount === 1 ? "" : "s"}
+          </span>
+        )}
+        <span className={cn(dupCount > 0 ? "" : "ml-auto", "whitespace-nowrap text-xs text-[#4B5563]")} data-testid="sheet-data-stats">
           {rows.length} rows · {rows.filter((r) => r.selected).length} ticked · <b>{labels}</b> labels to print
         </span>
         <span className="h-6 w-px bg-[#D9DDE3]" />
@@ -251,10 +259,12 @@ export default function SheetData() {
                     {columns.map((c) => {
                       const isEditing = editing?.id === r.id && editing.col === c;
                       const changed = !!orig && (orig[c] ?? "") !== (r.cells[c] ?? "");
+                      const dup = isDupCell(dupCells, c, r.cells[c]);
                       return (
-                        <td key={c} data-testid={`data-cell-${i}-${c}`} title={changed ? `Original: ${orig?.[c] || "(empty)"}` : r.cells[c]}
+                        <td key={c} data-testid={`data-cell-${i}-${c}`} title={dup ? `Duplicate barcode — "${r.cells[c]}" is used in another row` : changed ? `Original: ${orig?.[c] || "(empty)"}` : r.cells[c]}
+                          data-duplicate={dup || undefined}
                           onClick={() => !isEditing && startEdit(r, c)}
-                          className={cn("h-7 cursor-text truncate border-b border-r border-[#EEF0F2] px-2 py-0", c === qtyColumn && "bg-(--app-accent-soft) font-semibold", changed && "bg-[#FEF7E0]", isEditing && "p-0 outline outline-2 -outline-offset-2 outline-(--app-accent)")}>
+                          className={cn("h-7 cursor-text truncate border-b border-r border-[#EEF0F2] px-2 py-0", c === qtyColumn && "bg-(--app-accent-soft) font-semibold", changed && "bg-[#FEF7E0]", dup && "bg-[#FDECEA] font-medium text-[#C5221F] shadow-[inset_3px_0_0_#D93025]", isEditing && "p-0 outline outline-2 -outline-offset-2 outline-(--app-accent)")}>
                           {isEditing ? (
                             <input autoFocus data-testid="data-cell-editor" value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => onCellKey(e, r, c)}
                               className="h-7 w-full bg-white px-2 text-xs text-[#1F2937] outline-none" />

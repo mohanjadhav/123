@@ -11,6 +11,43 @@ export interface DupGroup {
   value: string;
   rows: number[]; // 1-based row numbers in the sheet
   printing: number; // how many of those rows are being printed now
+  where?: string[]; // queue: "Sheet · label · row N" descriptions instead of row numbers
+}
+
+/** Per column, the set of values that appear in 2+ rows (for red highlighting). */
+export function duplicateCells(rows: { cells: Record<string, string> }[], cols: string[]): Record<string, Set<string>> {
+  const out: Record<string, Set<string>> = {};
+  for (const c of cols) {
+    const seen = new Set<string>();
+    const dup = new Set<string>();
+    for (const r of rows) {
+      const v = (r.cells[c] ?? "").trim();
+      if (!v) continue;
+      if (seen.has(v)) dup.add(v);
+      seen.add(v);
+    }
+    if (dup.size) out[c] = dup;
+  }
+  return out;
+}
+
+export const isDupCell = (dups: Record<string, Set<string>>, col: string, value: string | undefined) => !!dups[col]?.has((value ?? "").trim());
+
+/** Across Print Queue jobs (any sheet): same barcode value on 2+ ticked rows. */
+export function findQueueDuplicates(jobs: { label: string; elements: LabelElement[]; mapping: Mapping; items: { cells: Record<string, string>; selected: boolean }[] }[]): DupGroup[] {
+  const seen = new Map<string, string[]>();
+  for (const j of jobs) {
+    const items = j.items.filter((i) => i.selected);
+    const cols = barcodeColumns(j.elements, j.mapping, [...new Set(items.flatMap((i) => Object.keys(i.cells)))]);
+    j.items.forEach((it, idx) => {
+      if (!it.selected) return;
+      for (const c of cols) {
+        const v = (it.cells[c] ?? "").trim();
+        if (v) seen.set(v, [...(seen.get(v) ?? []), `${j.label} · row ${idx + 1}`]);
+      }
+    });
+  }
+  return [...seen].filter(([, w]) => w.length > 1).map(([value, where]) => ({ column: "", value, rows: [], printing: where.length, where }));
 }
 
 /** Columns the label prints as barcode / QR; falls back to columns named like a barcode. */
@@ -62,8 +99,12 @@ export function useDuplicateGuard(): { guard: (groups: DupGroup[], print: () => 
           {pending?.groups.slice(0, 50).map((g) => (
             <li key={`${g.column}:${g.value}`} className="rounded-md border border-[#FBD38D] bg-[#FFF8E6] px-3 py-2 text-xs text-[#7A4B00]">
               <span className="font-mono font-semibold text-[#1F2937]">{g.value}</span>
-              <span className="text-[#9CA3AF]"> · {g.column}</span>
-              <div className="mt-0.5">in rows <b>{g.rows.join(", ")}</b>{g.printing < g.rows.length ? ` (${g.printing} being printed now)` : ""}</div>
+              {g.column && <span className="text-[#9CA3AF]"> · {g.column}</span>}
+              {g.where ? (
+                <div className="mt-0.5">in <b>{g.where.join("  ·  ")}</b></div>
+              ) : (
+                <div className="mt-0.5">in rows <b>{g.rows.join(", ")}</b>{g.printing < g.rows.length ? ` (${g.printing} being printed now)` : ""}</div>
+              )}
             </li>
           ))}
           {(pending?.groups.length ?? 0) > 50 && <li className="text-xs text-[#6B7280]">…and {(pending?.groups.length ?? 0) - 50} more</li>}

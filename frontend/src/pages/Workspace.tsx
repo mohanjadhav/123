@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Barcode, Copy, ListOrdered, Table2, Eye, FilePlus2, FolderOpen, Printer, Redo2, Save, Settings2, SlidersHorizontal, Undo2, X } from "lucide-react";
+import { Barcode, Cog, Copy, ListOrdered, Table2, Eye, FilePlus2, FolderOpen, Printer, Redo2, Save, Settings2, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { SheetImporter } from "@/components/SheetImporter";
 import { ThemePicker } from "@/components/ThemePicker";
@@ -14,6 +14,9 @@ import { NewLabelDialog, OpenLabelDialog } from "@/components/workspace/LabelDia
 import { LeftPanel } from "@/components/workspace/LeftPanel";
 import type { Library, Tool } from "@/components/workspace/LeftPanel";
 import { ImageLibrary } from "@/components/workspace/ImageLibrary";
+import { SettingsDialog, UpdateBanner } from "@/components/SettingsDialog";
+import { alignEls, distributeEls } from "@/lib/align";
+import type { AlignKind } from "@/lib/align";
 import { PrintPortal, PrintPreviewDialog } from "@/components/workspace/PrintPreview";
 import { RefreshDialog } from "@/components/workspace/RefreshDialog";
 import { useSheetCopy } from "@/lib/useSheetCopy";
@@ -71,7 +74,10 @@ export default function Workspace() {
   const [openIds, setOpenIds] = useState<string[]>(() => load("bc.openTabs", []));
   const [activeId, setActiveId] = useState<string>(() => load("bc.activeTab", ""));
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+  const setSelectedId = useCallback((id: string | null) => setSelectedIds(id ? [id] : []), []);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [zooms, setZooms] = useState<Record<string, number>>({});
   const [printJob, setPrintJob] = useState<{ rows: Row[]; single: boolean } | null>(null);
   const [dialog, setDialog] = useState<null | "new" | "open" | "import" | "preview" | "refresh" | "pagesetup">(null);
@@ -93,6 +99,7 @@ export default function Workspace() {
   const draft = draftOf(currentId, drafts);
   const tpl = draft?.tpl ?? null;
   const selected = tpl?.elements.find((e) => e.id === selectedId) ?? null;
+  const selectedEls = useMemo(() => tpl?.elements.filter((e) => selectedIds.includes(e.id)) ?? [], [tpl, selectedIds]);
 
   const change = useCallback((fn: (t: Template) => Template, record = true) => {
     setDrafts((d) => {
@@ -120,6 +127,9 @@ export default function Workspace() {
 
   const updateEl = useCallback((id: string, patch: Partial<LabelElement>, record = true) =>
     change((t) => ({ ...t, elements: t.elements.map((e) => (e.id === id ? { ...e, ...patch } : e)) }), record), [change]);
+  const updateEls = useCallback((patches: Record<string, Partial<LabelElement>>, record = true) =>
+    change((t) => ({ ...t, elements: t.elements.map((e) => (patches[e.id] ? { ...e, ...patches[e.id] } : e)) }), record), [change]);
+  const removeEls = useCallback((ids: string[]) => { change((t) => ({ ...t, elements: t.elements.filter((e) => !ids.includes(e.id)) })); setSelectedIds([]); }, [change]);
   const removeEl = useCallback((id: string) => { change((t) => ({ ...t, elements: t.elements.filter((e) => e.id !== id) })); setSelectedId(null); }, [change]);
   const addEl = (el: LabelElement) => { change((t) => ({ ...t, elements: [...t.elements, el] })); setSelectedId(el.id); };
 
@@ -270,15 +280,33 @@ export default function Workspace() {
       if (typing) return;
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
-      if (!selected) return;
+      if (mod && e.key.toLowerCase() === "a" && tpl) { e.preventDefault(); setSelectedIds(tpl.elements.map((x) => x.id)); return; }
+      if (!selectedEls.length) return;
       const step = e.shiftKey ? 5 : 0.5;
       const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
-      if (moves[e.key]) { e.preventDefault(); updateEl(selected.id, { x: round(selected.x + moves[e.key][0]), y: round(selected.y + moves[e.key][1]) }); }
-      else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); removeEl(selected.id); }
+      if (moves[e.key]) {
+        e.preventDefault();
+        updateEls(Object.fromEntries(selectedEls.map((x) => [x.id, { x: round(x.x + moves[e.key][0]), y: round(x.y + moves[e.key][1]) }])));
+      } else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); removeEls(selectedEls.map((x) => x.id)); }
+      else if (e.key === "Escape") setSelectedIds([]);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, tpl, save, undo, redo, updateEl, removeEl]);
+  }, [selectedEls, tpl, save, undo, redo, updateEls, removeEls]);
+
+  const alignSel = (kind: AlignKind) => tpl && updateEls(alignEls(selectedEls, kind, tpl));
+  const distributeSel = (axis: "h" | "v") => updateEls(distributeEls(selectedEls, axis));
+  const duplicateSel = () => {
+    if (!selectedEls.length) return;
+    const copies = selectedEls.map((x) => ({ ...x, id: crypto.randomUUID(), x: x.x + 2, y: x.y + 2 }));
+    change((t) => ({ ...t, elements: [...t.elements, ...copies] }));
+    setSelectedIds(copies.map((c) => c.id));
+  };
+  const arrangeSel = (dir: "front" | "back") => change((t) => {
+    const sel = t.elements.filter((e) => selectedIds.includes(e.id));
+    const rest = t.elements.filter((e) => !selectedIds.includes(e.id));
+    return { ...t, elements: dir === "front" ? [...rest, ...sel] : [...sel, ...rest] };
+  });
 
   const zoom = tpl ? (zooms[tpl.id] ?? fitZoomFor(tpl)) : 1;
   const brands = [...new Set(templates.map((t) => t.brand))].sort();
@@ -307,8 +335,10 @@ export default function Workspace() {
         <ToolButton testId="new-template-button" icon={<FilePlus2 />} label="New label" primary onClick={() => setDialog("new")} />
         <ToolButton testId="copy-label-button" icon={<Copy />} label="Create a copy" onClick={() => tpl && duplicate.mutate(tpl.id)} disabled={!tpl} />
         <span className="ml-auto pr-2 text-xs text-[#6B7280]" data-testid="save-status">{tpl ? (draft?.dirty ? "● Unsaved changes" : "Saved") : ""}</span>
+        <ToolButton testId="settings-button" icon={<Cog />} label="Settings & backup" onClick={() => setSettingsOpen(true)} />
         <ThemePicker />
       </header>
+      <UpdateBanner />
 
       {/* Label tabs */}
       <nav className="flex h-9 shrink-0 items-end gap-0.5 overflow-x-auto border-b border-[#D9DDE3] bg-[#F3F4F6] px-2" data-testid="label-tabs">
@@ -338,9 +368,10 @@ export default function Workspace() {
             <LeftPanel onTool={addTool} columns={columns} sourceName={source?.name ?? null} onPickField={insertField} onOpenImport={() => setDialog("import")}
               layers={tpl.elements} selectedId={selectedId} onSelect={setSelectedId} />
             <Canvas tpl={tpl} row={previewRow} mapping={mapping} zoom={zoom} fitZoom={fitZoomFor(tpl)} onZoom={(z) => setZooms({ ...zooms, [tpl.id]: z })}
-              selectedId={selectedId} onSelect={setSelectedId} onChangeEl={(id, p) => updateEl(id, p, false)} onBeginChange={snapshot} onDropField={dropField} />
+              selectedIds={selectedIds} onSelectIds={setSelectedIds} onChangeEls={(p) => updateEls(p, false)} onBeginChange={snapshot} onDropField={dropField} />
             <aside className="w-72 shrink-0 overflow-y-auto border-l border-[#D9DDE3] bg-white">
-              <Inspector tpl={tpl} selected={selected} columns={columns}
+              <Inspector tpl={tpl} selected={selected} selection={selectedEls} onAlign={alignSel} onDistribute={distributeSel}
+                onGroupDuplicate={duplicateSel} onGroupDelete={() => removeEls(selectedIds)} onGroupArrange={arrangeSel} columns={columns}
                 onEl={(p) => selected && updateEl(selected.id, p)} onTpl={(p) => change((t) => ({ ...t, ...p }))}
                 onArrange={arrange} onDuplicate={duplicateEl} onDelete={() => selected && removeEl(selected.id)} onInsertField={insertField} onOpenLibrary={setLibrary} />
             </aside>
@@ -369,6 +400,7 @@ export default function Workspace() {
         </div>
       )}
 
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <ImageLibrary open={library !== null} onOpenChange={(o) => !o && setLibrary(null)} onPick={pickImage}
         title={library === "background" ? "Choose a background picture" : library === "logo" ? "Choose your logo" : "Choose an image"} />
       <NewLabelDialog open={dialog === "new"} onOpenChange={(o) => setDialog(o ? "new" : null)} brands={brands} pending={create.isPending} onCreate={(b) => create.mutate(b)} />

@@ -11,6 +11,7 @@ datas = [
     (str(ROOT / "frontend" / "dist"), "frontend_dist"),
     (str(BACKEND / "seed_data"), "seed_data"),
     (str(ROOT / "desktop" / "build" / "mongodb"), "mongodb"),
+    (str(ROOT / "desktop" / "build" / "app.json"), "."),
 ]
 binaries = []
 # backend packages listed from the file system (importing them here would need a database URL)

@@ -30,6 +30,15 @@ DATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local" / "share")) / 
 LOGS = DATA / "logs"
 
 
+def _load_build_info() -> None:
+    """app.json is written by the GitHub build: {"version": "1.0.12", "repo": "owner/repo"}."""
+    import json
+    f = BUNDLE / "app.json"
+    info = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+    os.environ.setdefault("APP_VERSION", str(info.get("version") or "1.0.0-dev"))
+    os.environ.setdefault("APP_REPO", str(info.get("repo") or ""))
+
+
 def _log_to_file() -> None:
     LOGS.mkdir(parents=True, exist_ok=True)
     if FROZEN or sys.stdout is None:  # windowed exe has no console
@@ -156,6 +165,8 @@ def run_server(app, port: int):
 
 def open_ui(url: str, browser: bool) -> None:
     import webview
+    webview.settings["ALLOW_DOWNLOADS"] = True  # backups download to the Downloads folder
+    webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True  # GitHub / update links open in the browser
     storage = str(DATA / "webview")
     if browser:
         webbrowser.open(url)
@@ -177,6 +188,7 @@ def open_ui(url: str, browser: bool) -> None:
 
 def main() -> None:
     _log_to_file()
+    _load_build_info()
     browser = "--browser" in sys.argv
     serve_only = "--serve-only" in sys.argv
     url = f"http://127.0.0.1:{APP_PORT}"

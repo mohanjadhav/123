@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Bold, CopyPlus, ImagePlus, Italic, RotateCcw, RotateCw, Strikethrough, Trash2, Underline, X,
+  AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalSpaceAround, AlignStartHorizontal,
+  AlignStartVertical, AlignVerticalSpaceAround, AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Bold, CopyPlus, ImagePlus, Italic, RotateCcw, RotateCw, Strikethrough, Trash2, Underline, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -9,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { FONTS, SIZE_PRESETS } from "@/lib/label";
 import { ICONS } from "@/lib/icons";
+import type { AlignKind } from "@/lib/align";
 import type { BarcodeFormat, Fit, LabelElement, ShapeKind, StrokeStyle, TemplateBase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -113,9 +115,44 @@ function Toggle({ active, onClick, children, testId, title }: { active: boolean;
   );
 }
 
-export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDuplicate, onDelete, onInsertField, onOpenLibrary }: {
+const ALIGNS: { kind: AlignKind; title: string; icon: ReactNode }[] = [
+  { kind: "left", title: "Align left edges", icon: <AlignStartVertical /> },
+  { kind: "hcenter", title: "Align centres (horizontal)", icon: <AlignCenterVertical /> },
+  { kind: "right", title: "Align right edges", icon: <AlignEndVertical /> },
+  { kind: "top", title: "Align top edges", icon: <AlignStartHorizontal /> },
+  { kind: "vmiddle", title: "Align middles (vertical)", icon: <AlignCenterHorizontal /> },
+  { kind: "bottom", title: "Align bottom edges", icon: <AlignEndHorizontal /> },
+];
+
+function AlignBar({ onAlign, onDistribute, count }: { onAlign: (k: AlignKind) => void; onDistribute?: (a: "h" | "v") => void; count: number }) {
+  return (
+    <div className="grid gap-2" data-testid="align-bar">
+      <div className="flex flex-wrap gap-1">
+        {ALIGNS.map((a) => <Toggle key={a.kind} title={count === 1 ? `${a.title} of the label` : a.title} testId={`align-${a.kind}-button`} active={false} onClick={() => onAlign(a.kind)}>{a.icon}</Toggle>)}
+      </div>
+      {onDistribute && (
+        <div className="flex gap-1">
+          <Button size="sm" variant="outline" className="h-7 flex-1 bg-white text-[11px]" data-testid="distribute-h-button" disabled={count < 3} onClick={() => onDistribute("h")} title="Equal gaps left → right (3 or more)">
+            <AlignHorizontalSpaceAround /> Space across
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 flex-1 bg-white text-[11px]" data-testid="distribute-v-button" disabled={count < 3} onClick={() => onDistribute("v")} title="Equal gaps top → bottom (3 or more)">
+            <AlignVerticalSpaceAround /> Space down
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Inspector({ tpl, selected, selection, onAlign, onDistribute, onGroupDuplicate, onGroupDelete, onGroupArrange, columns, onEl, onTpl, onArrange, onDuplicate, onDelete, onInsertField, onOpenLibrary }: {
   tpl: TemplateBase;
   selected: LabelElement | null;
+  selection: LabelElement[];
+  onAlign: (k: AlignKind) => void;
+  onDistribute: (axis: "h" | "v") => void;
+  onGroupDuplicate: () => void;
+  onGroupDelete: () => void;
+  onGroupArrange: (dir: "front" | "back") => void;
   columns: string[];
   onEl: (patch: Partial<LabelElement>) => void;
   onTpl: (patch: Partial<TemplateBase>) => void;
@@ -125,6 +162,27 @@ export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDu
   onInsertField: (col: string) => void;
   onOpenLibrary: (target: "replace" | "background") => void;
 }) {
+  if (selection.length > 1) {
+    return (
+      <div data-testid="multi-select-panel">
+        <div className="border-b border-[#E5E7EB] bg-[#F8F9FB] px-3 py-2 text-xs font-semibold text-[#1F2937]">{selection.length} elements selected</div>
+        <Group title="Align & space">
+          <AlignBar count={selection.length} onAlign={onAlign} onDistribute={onDistribute} />
+          <p className="mt-2 text-[10px] leading-snug text-[#9CA3AF]">Aligns to the selected group. Drag any of them to move all together — pink guides snap to edges &amp; centres.</p>
+        </Group>
+        <Group title="Arrange">
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button variant="outline" size="sm" className="bg-white" data-testid="group-front-button" onClick={() => onGroupArrange("front")}><ArrowUpToLine /> To front</Button>
+            <Button variant="outline" size="sm" className="bg-white" data-testid="group-back-button" onClick={() => onGroupArrange("back")}><ArrowDownToLine /> To back</Button>
+            <Button variant="outline" size="sm" className="bg-white" data-testid="group-duplicate-button" onClick={onGroupDuplicate}><CopyPlus /> Duplicate</Button>
+            <Button variant="outline" size="sm" className="bg-white text-[#D93025] hover:text-[#D93025]" data-testid="group-delete-button" onClick={onGroupDelete}><Trash2 /> Delete all</Button>
+          </div>
+        </Group>
+        <p className="px-3 py-3 text-[11px] leading-relaxed text-[#6B7280]">Shift+click to add/remove one · Ctrl+A selects all · arrows nudge all · Esc clears.</p>
+      </div>
+    );
+  }
+
   if (!selected) {
     return (
       <div data-testid="label-properties-panel">
@@ -346,6 +404,10 @@ export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDu
           </div>
         </Group>
       )}
+
+      <Group title="Align on label">
+        <AlignBar count={1} onAlign={onAlign} />
+      </Group>
 
       <Group title="Position & size (mm)">
         <div className="grid grid-cols-2 gap-2">

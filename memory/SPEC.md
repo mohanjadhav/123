@@ -72,3 +72,9 @@ No auth.
 - `.github/workflows/windows-installer.yml`: on push to main + manual → yarn build → pip → download MongoDB 7.0.14 → pyinstaller → smoke test (--serve-only, API + index) → iscc → artifact + GitHub Release v1.0.<run>.
 - `backend/export_seed_data.py` refreshes `seed_data/labels.json` from the DB.
 - Never `pip install -r desktop/requirements.txt` in the Emergent pod (pyinstaller/pywebview are Windows build-only).
+
+## Backup/Restore, Updates, Align & Snap (latest)
+- `GET /api/backup` → `.rlbackup` JSON file (format "rapid-labels-backup", collections templates, sheet_sources, sheet_copies (key source_id), sheet_uploads, print_queue, images; bytes as {"$b64"}, datetimes as {"$dt"}). `POST /api/backup/restore` (multipart `file`) MERGES via upsert on the key → RestoreResult {restored, total}; non-backup file → 400.
+- `GET /api/app/info` {version (env APP_VERSION, "web" on Emergent), desktop, update_repo}; `GET/PUT /api/app/settings` {update_repo "owner/repo", accepts github URLs, invalid → 400; stored in `settings` collection id "app"}; `GET /api/app/update-check` → GitHub releases/latest compare (update_available only on desktop). Desktop build writes app.json {version 1.0.<run>, repo github.repository} → launcher sets APP_VERSION/APP_REPO.
+- UI: toolbar cog "Settings & backup" → `components/SettingsDialog.tsx`; `UpdateBanner` under the toolbar (desktop only, dismiss per version).
+- Canvas multi-select (`selectedIds` in Workspace): Shift/Ctrl+click toggle, drag box on empty label, Ctrl+A, Esc; group drag; arrows/Delete apply to all. Snap (footer toggle, localStorage rl.snap; Alt = no snap) to label edges/centre + other elements' edges/centres, pink guides; resize snaps right/bottom edge. `lib/align.ts`: alignEls (1 element → label, many → group box), distributeEls (3+), snapBox, snapEdge. Inspector: multi panel (align/space/arrange/duplicate/delete all) + "Align on label" for one element.

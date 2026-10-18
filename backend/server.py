@@ -60,12 +60,14 @@ async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
 
-from routers import templates as templates_router, sheets as sheets_router, queue as queue_router, images as images_router  # noqa: E402
+from routers import templates as templates_router, sheets as sheets_router, queue as queue_router, images as images_router, backup as backup_router, appinfo as appinfo_router  # noqa: E402
 
 api_router.include_router(templates_router.router)
 api_router.include_router(sheets_router.router)
 api_router.include_router(queue_router.router)
 api_router.include_router(images_router.router)
+api_router.include_router(backup_router.router)
+api_router.include_router(appinfo_router.router)
 
 # Include the router in the main app
 app.include_router(api_router)

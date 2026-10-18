@@ -178,3 +178,26 @@ export interface ImageAsset {
   url: string; // relative /api URL usable directly in labels
   created_at: string;
 }
+
+// backend/models/backup.py
+export interface RestoreResult {
+  restored: Record<string, number>; // collection -> items added or replaced
+  total: number;
+}
+export interface AppSettings {
+  update_repo: string; // GitHub "owner/repo"
+}
+export interface AppInfo {
+  version: string; // "web" when not the Windows app
+  desktop: boolean;
+  update_repo: string;
+}
+export interface UpdateCheck {
+  current: string;
+  latest: string | null;
+  update_available: boolean;
+  release_url: string | null;
+  download_url: string | null;
+  notes: string;
+  error: string | null;
+}

@@ -47,6 +47,12 @@ jobs:
           Copy-Item (Get-ChildItem mongo_tmp -Recurse -Filter mongod.exe | Select-Object -First 1).FullName desktop/build/mongodb/
           Get-ChildItem mongo_tmp -Recurse -Filter LICENSE* | Select-Object -First 1 | Copy-Item -Destination desktop/build/mongodb/
 
+      - name: Version info (used by the "new version available" check)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/build | Out-Null
+          '{"version": "1.0.${{ github.run_number }}", "repo": "${{ github.repository }}"}' | Set-Content -Encoding utf8NoBOM desktop/build/app.json
+
       - name: Package RapidLabels.exe
         run: pyinstaller desktop/rapid_labels.spec --noconfirm
 

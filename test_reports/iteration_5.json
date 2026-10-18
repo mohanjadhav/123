@@ -1,0 +1,75 @@
+{
+  "iteration": 5,
+  "mode": "generate",
+  "summary": "Briefing covers Google Sheet tab-name sync-tabs (stale name restoration, no duplicate tabs), easy sheet selection dropdown, Open label list re-fetch for API-created labels, and last-used label persistence across lost localStorage. Wrote 3 new backend test files (4 tests) and 4 new browser checks. All 7 new artifacts passed; 1 browser check was flaky once on the public preview URL re-run due to a transient apiRequestContext timeout, then passed clean on immediate retry.",
+  "passed": 7,
+  "failed": 0,
+  "flaky": 1,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": false,
+  "bugs": [],
+  "action_items": [
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "Pre-existing backend tests test_tscheck_sheet_upload_xlsx.py and test_tscheck_sheet_upload_csv.py still fail at session start (depend on /tmp/brands.xlsx and /tmp/one.csv which don't survive ephemeral /tmp — same issue noted since iteration_3/4). Unrelated to this iteration's matrix, not touched."
+    },
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "Pre-existing test_tscheck_sync_tabs_idempotent.py (from an earlier iteration) now fails because it hardcodes workbook_name == 'CORRADO V2'; the live Google Sheet's real title has since drifted to 'SAMPLE TEST' in the environment (sync-tabs reads the title live from Google, by design). This is an environmental data-drift issue in a test I did not author this round, not a sync-tabs regression — my new test_tscheck_sync_tabs_restores_stale_names.py and test_tscheck_sources_no_duplicate_tabs.py independently verify the same sync-tabs endpoint correctly using the live title, and both pass."
+    }
+  ],
+  "checks": [
+    {
+      "criterion": "Google Sheet tab names refresh from Google (stale Mongo name restored on sync-tabs; order preserved; 404 for unknown id)",
+      "name": "test_tscheck_sync_tabs_restores_stale_names.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Set tab_index-1 source (real tab name 'BRAND 2') stale in Mongo to tab='Sheet2'/name='SAMPLE TEST — Sheet2'. POST /api/sources/{id}/sync-tabs -> 200; restored entry had tab='BRAND 2', tab_index=1, name='SAMPLE TEST — BRAND 2'; tab_index 0 unchanged ('BRAND 1'). POST /api/sources/tscheck-does-not-exist/sync-tabs -> 404."
+    },
+    {
+      "criterion": "No duplicate tab entries of the same spreadsheet",
+      "name": "test_tscheck_sources_no_duplicate_tabs.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST sync-tabs then GET /api/sources filtered to spreadsheet 13Ph00qpvmXj1Tm6RT99apE0mVl-Idg2aXA7gSEgO5pQ -> exactly 32 sources, 32 unique gids, tab_index set == 0..31 with no gaps/dupes."
+    },
+    {
+      "criterion": "Last used label reopens after restart, even if browser storage is lost (API: GET/PUT /api/workspace/state + 422 on bad body)",
+      "name": "test_tscheck_workspace_state_roundtrip.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "PUT /api/workspace/state {open_tabs:[tscheck-ws-a,tscheck-ws-b], active_tab:tscheck-ws-b} -> 200; GET confirms the same active_tab/open_tabs persisted. PUT with {open_tabs:'not-a-list', active_tab:123} -> 422. Original state restored in finally block."
+    },
+    {
+      "criterion": "Fresh names also appear on app open / Refresh without manual sync",
+      "name": "sheet-tabs-fresh-names-on-open",
+      "lane": "browser",
+      "status": "flaky",
+      "evidence": "Localhost run: PASSED — with the BRAND 2 source made stale in Mongo beforehand, opening SAMPLE NMM showed grid-sheet-tabs-tab-0..2 as 'BRAND 1'/'BRAND 2'/'Sheet3' within the silent auto-sync (no manual action); clicking sheet-refresh-button fired a POST /sources/{id}/sync-tabs (200); GET /api/sources confirmed tab restored to 'BRAND 2'. Public preview URL run (required lane): first attempt failed on a page.request.get('/api/sources') apiRequestContext 30s timeout (transient network blip, UI assertions upstream of it had already passed with 2 screenshots captured) — immediate re-run on the same preview URL PASSED clean end-to-end. Classified flaky, not a bug."
+    },
+    {
+      "criterion": "Easy sheet selection (grouped dropdown, plain-name trigger, switching tabs)",
+      "name": "sheet-source-select-grouped-dropdown",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Fixture label 'tscheck-sheet-select' linked to BRAND 1 source: sheet-source-select trigger showed plain 'BRAND 1'; dropdown group 'SAMPLE TEST' listed 'sheet-source-option-<BRAND1 id>'='1. BRAND 1' and '...<BRAND2 id>'='2. BRAND 2'; selecting BRAND 2 triggered PUT /api/templates/{id} and trigger updated to 'BRAND 2'. Fixture deleted after."
+    },
+    {
+      "criterion": "New labels show in Open label (list re-fetched for a label created via API while the dialog/page is open)",
+      "name": "open-label-shows-api-created-label",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Opened Open-label dialog, searched 'tscheck-api-created' before the label existed -> 'No labels match your search.'; closed dialog, created the label directly via POST /api/templates; reopened Open label (triggers templatesQ.refetch()) -> template-card-<id> visible, opened it -> label-tab-open-<id> visible. Fixture deleted after."
+    },
+    {
+      "criterion": "Last used label reopens after restart, even if browser storage is lost (UI)",
+      "name": "last-label-reopens-after-storage-clear",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Created+opened fixture label, added a text element (save-status '● Unsaved changes' -> auto-saved back to 'Saved'); GET /api/workspace/state confirmed active_tab==fixture id and GET /api/templates/{id} had the element. Cleared localStorage, reloaded: label-tab-open-<id> and canvas-editor-container visible again (same label active) with GET /api/workspace/state.active_tab unchanged. PUT /api/workspace/state with bad body -> 422. Fixture deleted after."
+    }
+  ]
+}

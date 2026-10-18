@@ -104,3 +104,10 @@ No auth.
 - Workflow: optional signtool signing when secrets WINDOWS_CERT_PFX/WINDOWS_CERT_PASSWORD exist (job env HAS_CERT), SHA-256 checksum file published with the release, `actions/attest-build-provenance` (continue-on-error: private repos on free plans can't attest).
 - Frontend: SheetData / PrintQueue / History are lazy-loaded routes (React.lazy + Suspense) so the designer bundle is smaller.
 - Pinned labels: `pinned: bool` on Template (Pydantic + TS); `PATCH /api/templates/{id}/pin` {pinned} sets it WITHOUT touching updated_at (404 if missing). Open label grid (4 per row) shows pinned first (yellow pin badge), then most recently edited; pin/unpin button `pin-template-<id>`.
+
+## Google Sheet tab names always fresh + last label everywhere (latest)
+- `POST /api/sources/{id}/sync-tabs` re-reads the spreadsheet title + every tab name/order from Google (`htmlview`) each time: renamed tabs/file update (`tab`, `name` = "<file> — <tab>", `workbook_name`, brand if it was the tab name/General), new tabs are added, tabs deleted in Google are removed (labels linked to them become unlinked), and duplicate saved entries of the same tab (incl. old links without `#gid=` = first tab) are merged into one (labels re-pointed). The requesting source id is always kept.
+- Sync runs on Connect (also for an already-saved link), after every Refresh (designer + Sheet data page), silently once per spreadsheet each time the app opens (SheetTabs), and on the "Sync tabs" button.
+- Designer sheet dropdown groups tabs under their spreadsheet name in real order ("1. BRAND 1", "2. BRAND 2"…); trigger shows only the tab name.
+- `GET/PUT /api/workspace/state` {open_tabs, active_tab} (Mongo `app_state` _id "workspace") — the designer restores open labels + last active label from the DB on every start (Windows app, web, any browser), localStorage is only a fallback.
+- Labels auto-save ~1.5 s after the last edit (status "Saving…" → "Saved"); closing the window with unsaved edits warns. The Open label dialog re-fetches the label list each time it opens; the label list request retries 4× (cold-start hosts). 502/503/504/404 errors show a plain explanation.

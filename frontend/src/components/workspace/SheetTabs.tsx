@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FileSpreadsheet, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -6,6 +7,7 @@ import type { SheetSource } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const isGoogle = (s: SheetSource) => s.url.includes("docs.google.com/spreadsheets");
+const autoSynced = new Set<string>(); // spreadsheets already re-read since the app was opened
 
 /** Excel-style tab bar for switching between brand tabs of the same spreadsheet / file. */
 export function SheetTabs({ sources, active, onSelect, testId = "sheet-tabs" }: {
@@ -23,6 +25,20 @@ export function SheetTabs({ sources, active, onSelect, testId = "sheet-tabs" }: 
     },
     onError: (err) => toast.error(apiErrorDetail(err, "Could not read the spreadsheet tabs")),
   });
+  // Every time the app opens, quietly pick up renamed / new / deleted tabs from Google.
+  const silent = useMutation({
+    mutationFn: (id: string) => apiPost<SheetSource[]>(`/sources/${id}/sync-tabs`),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["sources"] });
+      qc.invalidateQueries({ queryKey: ["templates"] });
+    },
+  });
+  const autoKey = active && isGoogle(active) ? active.workbook ?? active.id : null;
+  useEffect(() => {
+    if (!active || !autoKey || autoSynced.has(autoKey)) return;
+    autoSynced.add(autoKey);
+    silent.mutate(active.id);
+  }, [autoKey]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!active) return null;
   const siblings = active.workbook
     ? sources.filter((s) => s.workbook === active.workbook).sort((a, b) => a.tab_index - b.tab_index)
@@ -48,10 +64,10 @@ export function SheetTabs({ sources, active, onSelect, testId = "sheet-tabs" }: 
         );
       })}
       {google && (
-        <button data-testid={`${testId}-sync`} disabled={sync.isPending} onClick={() => sync.mutate(active.id)}
-          title={active.workbook ? "Check the spreadsheet for new tabs" : "Find the other tabs (brands) in this spreadsheet"}
+        <button data-testid={`${testId}-sync`} disabled={sync.isPending || silent.isPending} onClick={() => sync.mutate(active.id)}
+          title={active.workbook ? "Re-read tab names and new / deleted tabs from Google" : "Find the other tabs (brands) in this spreadsheet"}
           className="my-1 ml-1 flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 text-[11px] text-(--app-accent) transition-colors duration-150 hover:bg-white disabled:opacity-50">
-          {active.workbook ? <RefreshCw className={cn("size-3", sync.isPending && "animate-spin")} /> : <Search className="size-3" />}
+          {active.workbook ? <RefreshCw className={cn("size-3", (sync.isPending || silent.isPending) && "animate-spin")} /> : <Search className="size-3" />}
           {active.workbook ? "Sync tabs" : "Find tabs"}
         </button>
       )}

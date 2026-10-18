@@ -60,6 +60,8 @@ export function apiErrorDetail(err: unknown, fallback: string): string {
       const msgs = d.map((x: { loc?: unknown[]; msg?: string }) => `${(x.loc ?? []).filter((p) => p !== "body").join(" › ")}: ${x.msg ?? ""}`).slice(0, 3);
       if (msgs.length) return msgs.join("; ");
     }
+    if ([502, 503, 504].includes(err.status)) return `Server error ${err.status} — the app server is still starting or not reachable. Wait a moment and press Retry.`;
+    if (err.status === 404) return "Server error 404 — this copy of the app is older than its screens. Update / redeploy the app, then try again.";
     return `Server error ${err.status}`;
   }
   return fallback;

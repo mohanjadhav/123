@@ -245,3 +245,9 @@ export interface BarcodeReserve {
 }
 export interface BarcodeCounter { key: string; kind: string; prefix: string; next: number }
 export interface BarcodeBatch { values: string[]; next: number }
+
+/** Mirrors backend models/workspace.py WorkspaceState — open label tabs + last used label. */
+export interface WorkspaceState {
+  open_tabs: string[];
+  active_tab: string;
+}

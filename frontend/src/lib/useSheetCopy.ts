@@ -51,6 +51,11 @@ export function useSheetCopy(sourceId: string | null) {
       window.clearTimeout(timer.current);
       setSaveState("idle");
       qc.setQueryData(["copy", sourceId], res.sheet);
+      // also re-read the spreadsheet's tab names (renamed / new / deleted tabs in Google)
+      void apiPost(`/sources/${sourceId}/sync-tabs`).catch(() => null).finally(() => {
+        qc.invalidateQueries({ queryKey: ["sources"] });
+        qc.invalidateQueries({ queryKey: ["templates"] });
+      });
       toast.success(mode === "replace" ? `Loaded ${res.sheet.rows.length} rows from the original sheet` : `${res.added} new row${res.added === 1 ? "" : "s"} added, your edits kept`);
     },
     onError: (err) => toast.error(apiErrorDetail(err, "Could not refresh sheet")),

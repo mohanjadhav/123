@@ -6,7 +6,7 @@ import { SheetTabs } from "@/components/workspace/SheetTabs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QtyColumnSelect } from "@/components/workspace/QtyColumnSelect";
 import { QtyStepper } from "@/components/workspace/QtyStepper";
 import { rowQty, useColumnWidths } from "@/lib/grid";
@@ -14,6 +14,19 @@ import type { CopyRow, Row, SheetSource } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const NONE = "__none__";
+
+/** Tabs of one spreadsheet / workbook are listed together, in their real order, under the file name. */
+function groupSources(sources: SheetSource[]) {
+  const groups: { key: string; label: string | null; items: SheetSource[] }[] = [];
+  for (const s of sources) {
+    const key = s.workbook ?? `single-${s.id}`;
+    let g = groups.find((x) => x.key === key);
+    if (!g) groups.push((g = { key, label: s.workbook ? s.workbook_name ?? "Spreadsheet" : null, items: [] }));
+    g.items.push(s);
+  }
+  for (const g of groups) g.items.sort((a, b) => a.tab_index - b.tab_index);
+  return groups;
+}
 
 export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSource, columns, rows, edited, loading, error, canRefresh, refreshing, onRefresh, onOpenImport,
   onToggle, onQty, qtyColumn, onQtyColumn, onPrintRow, onPreview, onPrint, onQueue, onGenerate, dupCells, collapsed, onCollapse, onEditData }: {
@@ -65,11 +78,20 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
         <Select value={activeSourceId ?? NONE} onValueChange={(v: string) => onChooseSource(v === NONE ? null : v)}>
           <SelectTrigger size="sm" className="h-7 w-48 max-w-full bg-white" data-testid="sheet-source-select">
             <FileSpreadsheet className="size-3.5 text-[#188038]" />
-            <SelectValue>{(v) => sources.find((s) => s.id === v)?.name ?? "No sheet connected"}</SelectValue>
+            <SelectValue>{(v) => { const s = sources.find((x) => x.id === v); return s ? (s.tab ?? s.name) : "No sheet connected"; }}</SelectValue>
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>No sheet connected</SelectItem>
-            {sources.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          <SelectContent className="max-h-96">
+            <SelectItem value={NONE} data-testid="sheet-source-option-none">No sheet connected</SelectItem>
+            {groupSources(sources).map((g) => (
+              <SelectGroup key={g.key}>
+                {g.label && <SelectLabel className="text-[10px] font-semibold uppercase tracking-wide text-[#188038]" data-testid={`sheet-source-group-${g.key}`}>{g.label}</SelectLabel>}
+                {g.items.map((s) => (
+                  <SelectItem key={s.id} value={s.id} data-testid={`sheet-source-option-${s.id}`} className={g.label ? "pl-4" : undefined}>
+                    {g.label ? `${s.tab_index + 1}. ${s.tab ?? s.name}` : s.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
           </SelectContent>
         </Select>
         {active && (

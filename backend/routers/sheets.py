@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from lib.db import db
 import json
+from html import unescape
 from datetime import datetime, timezone
 
 from models.labels import (
@@ -303,18 +304,34 @@ def _gid(url: str) -> str | None:
     return m.group(1) if m else None
 
 
-async def google_tabs(sheet_id: str) -> List[SheetTab]:
+async def _google_html(sheet_id: str) -> str:
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=20) as client:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=20, headers={"Cache-Control": "no-cache"}) as client:
             res = await client.get(f"https://docs.google.com/spreadsheets/d/{sheet_id}/htmlview")
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Could not reach Google Sheets: {exc}") from exc
-    items = re.findall(r'items\.push\(\{name:\s*"((?:[^"\\]|\\.)*)",\s*pageUrl:[^}]*?gid:\s*"(\d+)"', res.text)
+    return res.text
+
+
+def _parse_tabs(sheet_id: str, html: str) -> List[SheetTab]:
+    items = re.findall(r'items\.push\(\{name:\s*"((?:[^"\\]|\\.)*)",\s*pageUrl:[^}]*?gid:\s*"(\d+)"', html)
     tabs: List[SheetTab] = []
     for raw, gid in items:
         name = json.loads(f'"{raw}"')  # unescape \uXXXX / \" sequences
         tabs.append(SheetTab(name=name, gid=gid, url=f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit#gid={gid}"))
     return tabs
+
+
+def _parse_title(html: str) -> str | None:
+    m = re.search(r"<title>([^<]*)</title>", html)
+    if not m:
+        return None
+    title = re.sub(r"\s*-\s*Google (Drive|Sheets|Docs)\s*$", "", unescape(m.group(1))).strip()
+    return title or None
+
+
+async def google_tabs(sheet_id: str) -> List[SheetTab]:
+    return _parse_tabs(sheet_id, await _google_html(sheet_id))
 
 
 @router.post("/sheets/tabs", response_model=List[SheetTab])
@@ -338,29 +355,44 @@ async def sync_tabs(id: str):
             docs = await db.sheet_sources.find({"workbook": src.workbook}, {"_id": 0}).sort("tab_index", 1).to_list(200)
             return [SheetSource(**d) for d in docs]
         return [src]
-    tabs = await google_tabs(sheet_id)
+    html = await _google_html(sheet_id)
+    tabs = _parse_tabs(sheet_id, html)
     if not tabs:
         return [src]
     workbook = f"google:{sheet_id}"
-    wb_name = src.workbook_name
-    if not wb_name:
-        try:
-            data = await fetch_sheet(SheetFetchRequest(url=src.url))
-            first = next((t for t in tabs if t.gid == _gid(src.url)), tabs[0])
-            wb_name = re.sub(rf"\s*-\s*{re.escape(first.name)}$", "", data.name) or data.name or "Google Sheet"
-        except HTTPException:
-            wb_name = "Google Sheet"
+    # Always re-read the spreadsheet + tab names so renames in Google show up here.
+    wb_name = _parse_title(html) or src.workbook_name or "Google Sheet"
     existing = await db.sheet_sources.find({"$or": [{"workbook": workbook}, {"url": {"$regex": re.escape(sheet_id)}}]}, {"_id": 0}).to_list(500)
-    by_gid = {(_gid(e["url"]) or "0"): e for e in existing}
+    edited = {c["source_id"] for c in await db.sheet_copies.find(
+        {"source_id": {"$in": [e["id"] for e in existing]}, "edited": True}, {"_id": 0, "source_id": 1}).to_list(500)}
+    first_gid = tabs[0].gid  # a link without #gid= opens the first tab
+    groups: dict[str, list[dict]] = {}
+    for e in existing:
+        groups.setdefault(_gid(e["url"]) or first_gid, []).append(e)
+    live = {t.gid for t in tabs}
     out: List[SheetSource] = []
     for i, tab in enumerate(tabs):
-        meta = {"workbook": workbook, "workbook_name": wb_name, "tab": tab.name, "tab_index": i}
-        hit = by_gid.get(tab.gid)
-        if hit:
-            await db.sheet_sources.update_one({"id": hit["id"]}, {"$set": {**meta, "name": f"{wb_name} — {tab.name}"}})
-            out.append(SheetSource(**{**hit, **meta, "name": f"{wb_name} — {tab.name}"}))
+        meta = {"workbook": workbook, "workbook_name": wb_name, "tab": tab.name, "tab_index": i, "name": f"{wb_name} — {tab.name}"}
+        dupes = sorted(groups.get(tab.gid, []), key=lambda e: (e["id"] != id, e["id"] not in edited, e.get("workbook") != workbook))
+        if dupes:
+            keep, extra = dupes[0], dupes[1:]
+            if keep.get("brand") in (None, "", "General", keep.get("tab")):
+                meta["brand"] = tab.name
+            await db.sheet_sources.update_one({"id": keep["id"]}, {"$set": meta})
+            out.append(SheetSource(**{**keep, **meta}))
+            await _drop_sources([e["id"] for e in extra], keep["id"])
         else:
-            new = SheetSource(name=f"{wb_name} — {tab.name}", brand=tab.name, url=tab.url, template_id=src.template_id, **meta)
+            new = SheetSource(brand=tab.name, url=tab.url, template_id=src.template_id, **meta)
             await db.sheet_sources.insert_one(new.model_dump())
             out.append(new)
+    # tabs deleted in Google disappear here too (labels linked to them are unlinked)
+    await _drop_sources([e["id"] for g, es in groups.items() if g not in live for e in es], None)
     return out
+
+
+async def _drop_sources(ids: List[str], replacement: str | None) -> None:
+    if not ids:
+        return
+    await db.templates.update_many({"source_id": {"$in": ids}}, {"$set": {"source_id": replacement}})
+    await db.sheet_sources.delete_many({"id": {"$in": ids}})
+    await db.sheet_copies.delete_many({"source_id": {"$in": ids}})

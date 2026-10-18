@@ -8,6 +8,8 @@ import { apiErrorDetail, apiPost, apiUpload } from "@/lib/api";
 import { fetchSheet } from "@/lib/label";
 import type { SheetSource } from "@/lib/types";
 
+const gidOf = (url: string) => /[#&?]gid=(\d+)/.exec(url)?.[1] ?? null;
+
 /** Paste a Google Sheets/CSV link or upload a CSV/XLSX — every import is saved as a sheet source. */
 export function SheetImporter({ sources, onImported }: {
   sources: SheetSource[];
@@ -21,17 +23,17 @@ export function SheetImporter({ sources, onImported }: {
     mutationFn: async (link: string) => {
       const data = await fetchSheet(link);
       qc.setQueryData(["sheet", link], data);
-      const existing = sources.find((s) => s.url === link);
-      if (existing) return [existing];
-      const src = await apiPost<SheetSource>("/sources", {
+      const src = sources.find((s) => s.url === link) ?? await apiPost<SheetSource>("/sources", {
         name: data.name || `Google Sheet ${sources.length + 1}`,
         brand: "General",
         url: link,
         template_id: null,
       });
-      // Pick up every brand tab of the spreadsheet as its own saved sheet.
+      // Re-read every tab of the spreadsheet fresh (new / renamed / deleted tabs) as its own saved sheet.
       const tabs = await apiPost<SheetSource[]>(`/sources/${src.id}/sync-tabs`).catch(() => [src]);
-      return [tabs.find((t) => t.id === src.id) ?? src, ...tabs.filter((t) => t.id !== src.id)];
+      const gid = gidOf(link);
+      const pick = tabs.find((t) => t.id === src.id) ?? tabs.find((t) => gidOf(t.url) === gid) ?? tabs[0] ?? src;
+      return [pick, ...tabs.filter((t) => t.id !== pick.id)];
     },
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["sources"] });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHistorySummary, useRecordPrint } from "@/lib/history";
 import { barcodeColumns, duplicateCells, findDuplicates, useDuplicateGuard } from "@/components/workspace/DuplicateGuard";
 import { BarcodeGenerator } from "@/components/workspace/BarcodeGenerator";
@@ -27,9 +27,9 @@ import { queueItemsFrom, useAddToQueue, useQueueCount } from "@/lib/queue";
 import { expandRows, rowQty, tickByQty, withQty, withTick } from "@/lib/grid";
 import { PageSetupDialog } from "@/components/workspace/PageSetupDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { apiDelete, apiErrorDetail, apiPatch, apiPost, apiPut } from "@/lib/api";
+import { apiDelete, apiErrorDetail, apiGet, apiPatch, apiPost, apiPut } from "@/lib/api";
 import { autoMapping, fetchSources, fetchTemplates, MM_TO_PX, newElement, placeholdersOf } from "@/lib/label";
-import type { LabelElement, Row, SheetSource, Template, TemplateBase } from "@/lib/types";
+import type { LabelElement, Row, SheetSource, Template, TemplateBase, WorkspaceState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Draft {
@@ -69,7 +69,9 @@ function ToolButton({ icon, label, onClick, disabled, testId, primary }: { icon:
 export default function Workspace() {
   const qc = useQueryClient();
   const nav = useNavigate();
-  const templatesQ = useQuery({ queryKey: ["templates"], queryFn: fetchTemplates });
+  // retry a few times — a free web host or the Windows app may still be waking up on the first request
+  const templatesQ = useQuery({ queryKey: ["templates"], queryFn: fetchTemplates, retry: 4, retryDelay: (n) => Math.min(1000 * 2 ** n, 8000) });
+  const stateQ = useQuery({ queryKey: ["workspace-state"], queryFn: () => apiGet<WorkspaceState>("/workspace/state"), retry: 2, staleTime: Infinity });
   const sourcesQ = useQuery({ queryKey: ["sources"], queryFn: fetchSources });
   const templates = useMemo(() => (templatesQ.isError ? [] : (templatesQ.data ?? [])), [templatesQ.data, templatesQ.isError]);
   const sources = sourcesQ.isError ? [] : (sourcesQ.data ?? []);
@@ -95,11 +97,29 @@ export default function Workspace() {
     return ids.length || !templates.length ? ids : [templates[0].id]; // list is sorted newest-edited first
   }, [openIds, templates, loaded]);
   const currentId = tabIds.includes(activeId) ? activeId : (tabIds[tabIds.length - 1] ?? "");
+  // The last-used labels are also kept in the app database, so they reopen after a restart of the Windows app,
+  // in another browser or on the web version — not only in this window's local storage.
+  const restored = useRef(false);
   useEffect(() => {
-    if (!loaded) return;
+    if (restored.current || !stateQ.isFetched) return;
+    restored.current = true;
+    const st = stateQ.data;
+    if (st?.active_tab) {
+      setOpenIds(st.open_tabs.length ? st.open_tabs : [st.active_tab]);
+      setActiveId(st.active_tab);
+    }
+  }, [stateQ.isFetched, stateQ.data]);
+  useEffect(() => {
+    if (!loaded || !restored.current) return;
     localStorage.setItem("bc.openTabs", JSON.stringify(tabIds));
     localStorage.setItem("bc.activeTab", JSON.stringify(currentId));
-  }, [tabIds, currentId, loaded]);
+    const st = qc.getQueryData<WorkspaceState>(["workspace-state"]);
+    if (currentId && (st?.active_tab !== currentId || st.open_tabs.join() !== tabIds.join())) {
+      const next = { open_tabs: tabIds, active_tab: currentId };
+      qc.setQueryData(["workspace-state"], next);
+      void apiPut<WorkspaceState>("/workspace/state", next).catch(() => null);
+    }
+  }, [tabIds, currentId, loaded, stateQ.isFetched, qc]);
 
   const draftOf = useCallback((id: string, d: Record<string, Draft>): Draft | undefined => {
     if (d[id]) return d[id];
@@ -184,6 +204,26 @@ export default function Workspace() {
     },
     onError: (e) => toast.error("Save failed", { description: apiErrorDetail(e, "The server did not answer — check your connection and try again.") }),
   });
+  // Auto-save: every changed label is stored ~1.5 s after the last edit, so nothing is lost when the app is closed.
+  const autoSave = useMutation({
+    mutationFn: async (t: Template) => ({ sent: t, saved: await putTemplate(t.id, toBase(t)) }),
+    onSuccess: ({ sent, saved }) => {
+      syncSaved(saved);
+      setDrafts((d) => (d[saved.id]?.tpl === sent ? { ...d, [saved.id]: { ...d[saved.id], dirty: false } } : d));
+    },
+  });
+  useEffect(() => {
+    const dirty = Object.values(drafts).filter((d) => d.dirty && d.tpl.name.trim());
+    if (!dirty.length) return;
+    const timer = window.setTimeout(() => dirty.forEach((d) => autoSave.mutate(d.tpl)), 1500);
+    return () => window.clearTimeout(timer);
+  }, [drafts]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => { if (Object.values(drafts).some((d) => d.dirty)) e.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [drafts]);
+
   const create = useMutation({
     mutationFn: (body: TemplateBase) => apiPost<Template>("/templates", body),
     onSuccess: (t) => {
@@ -369,10 +409,10 @@ export default function Workspace() {
         <ToolButton testId="page-setup-button" icon={<Settings2 />} label="Page setup" onClick={() => setDialog("pagesetup")} disabled={!tpl} />
         <ToolButton testId="label-properties-button" icon={<SlidersHorizontal />} label="Label properties" onClick={() => setSelectedId(null)} disabled={!tpl} />
         <span className="mx-1 h-6 w-px bg-[#E5E7EB]" />
-        <ToolButton testId="open-label-button" icon={<FolderOpen />} label="Open label" onClick={() => setDialog("open")} />
+        <ToolButton testId="open-label-button" icon={<FolderOpen />} label="Open label" onClick={() => { setDialog("open"); void templatesQ.refetch(); }} />
         <ToolButton testId="new-template-button" icon={<FilePlus2 />} label="New label" primary onClick={() => setDialog("new")} />
         <ToolButton testId="copy-label-button" icon={<Copy />} label="Create a copy" onClick={() => tpl && duplicate.mutate(tpl.id)} disabled={!tpl} />
-        <span className="ml-auto pr-2 text-xs text-[#6B7280]" data-testid="save-status">{tpl ? (draft?.dirty ? "● Unsaved changes" : "Saved") : ""}</span>
+        <span className="ml-auto pr-2 text-xs text-[#6B7280]" data-testid="save-status">{tpl ? (draft?.dirty ? (autoSave.isPending ? "Saving…" : "● Unsaved changes") : "Saved") : ""}</span>
         <button data-testid="today-printed-badge" onClick={() => nav("/history")} title="Labels printed today — open Print history"
           className="mr-1 flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-[#E6F4EA] px-2.5 text-xs text-[#137333] transition-colors duration-150 hover:bg-[#CEEAD6] [&_svg]:size-3.5">
           <Printer /> Today: <b className="font-mono">{(history.data?.today_labels ?? 0).toLocaleString()}</b>
@@ -436,7 +476,7 @@ export default function Workspace() {
             <p className="mb-4 text-sm text-[#4B5563]">{templatesQ.isLoading ? "Loading labels…" : "No label open."}</p>
             <div className="flex justify-center gap-2">
               <button data-testid="empty-new-label-button" onClick={() => setDialog("new")} className="rounded-md bg-(--app-accent) px-4 py-2 text-sm text-white hover:bg-(--app-accent-hover)">New label</button>
-              <button data-testid="empty-open-label-button" onClick={() => setDialog("open")} className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm hover:bg-[#F3F4F6]">Open label</button>
+              <button data-testid="empty-open-label-button" onClick={() => { setDialog("open"); void templatesQ.refetch(); }} className="rounded-md border border-[#D1D5DB] bg-white px-4 py-2 text-sm hover:bg-[#F3F4F6]">Open label</button>
             </div>
           </div>
         </div>

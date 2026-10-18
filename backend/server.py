@@ -61,6 +61,7 @@ async def get_status_checks():
     return [StatusCheck(**status_check) for status_check in status_checks]
 
 from routers import templates as templates_router, sheets as sheets_router, queue as queue_router, images as images_router, backup as backup_router, appinfo as appinfo_router, history as history_router  # noqa: E402
+from routers import workspace as workspace_router
 
 api_router.include_router(templates_router.router)
 api_router.include_router(sheets_router.router)
@@ -69,6 +70,7 @@ api_router.include_router(images_router.router)
 api_router.include_router(backup_router.router)
 api_router.include_router(appinfo_router.router)
 api_router.include_router(history_router.router)
+api_router.include_router(workspace_router.router)
 
 # Include the router in the main app
 app.include_router(api_router)

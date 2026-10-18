@@ -270,7 +270,7 @@ export default function Workspace() {
       <header className="no-scrollbar flex h-12 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-[#D9DDE3] bg-white px-2" data-testid="app-header">
         <div className="mr-2 flex shrink-0 items-center gap-2 pl-1 pr-3">
           <span className="grid size-7 place-items-center rounded-md bg-(--app-accent) text-white"><Barcode className="size-4" /></span>
-          <span className="hidden text-sm font-semibold tracking-tight md:inline">EASY LABELS <span className="font-normal text-[#6B7280]">by HC</span></span>
+          <span className="hidden text-sm font-semibold tracking-tight md:inline">RAPID LABELS <span className="font-normal text-[#6B7280]">by MOHAN</span></span>
         </div>
         <ToolButton testId="toolbar-preview-button" icon={<Eye />} label="Preview" primary onClick={() => setDialog("preview")} disabled={!tpl} />
         <ToolButton testId="toolbar-print-button" icon={<Printer />} label="Print" primary onClick={() => runPrint(printRows)} disabled={!tpl} />

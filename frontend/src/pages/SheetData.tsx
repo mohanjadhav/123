@@ -133,7 +133,7 @@ export default function SheetData() {
         </Link>
         <span className="h-6 w-px bg-[#E5E7EB]" />
         <span className="grid size-7 place-items-center rounded-md bg-(--app-accent) text-white"><Barcode className="size-4" /></span>
-        <h1 className="hidden whitespace-nowrap text-sm font-semibold xl:block">EASY LABELS <span className="font-normal text-[#6B7280]">by HC</span> <span className="font-normal text-[#9CA3AF]">· Sheet data</span></h1>
+        <h1 className="hidden whitespace-nowrap text-sm font-semibold xl:block">RAPID LABELS <span className="font-normal text-[#6B7280]">by MOHAN</span> <span className="font-normal text-[#9CA3AF]">· Sheet data</span></h1>
         <Select value={sourceId} onValueChange={(v: string) => { setEditing(null); nav(`/data/${v}`); }}>
           <SelectTrigger size="sm" className="h-8 w-52 bg-white" data-testid="sheet-data-source-select">
             <FileSpreadsheet className="size-3.5 text-[#188038]" />
@@ -184,7 +184,7 @@ export default function SheetData() {
       </div>
 
       <p className="flex shrink-0 items-center gap-2 border-b border-(--app-accent-ring) bg-(--app-accent-soft) px-3 py-1.5 text-xs text-(--app-accent-hover)" data-testid="sheet-data-notice">
-        <Info className="size-3.5" /> Changes here are saved in EASY LABELS only — your original Google Sheet / file is never changed. Click a cell to edit · Enter / Tab to move · Esc to cancel.
+        <Info className="size-3.5" /> Changes here are saved in RAPID LABELS only — your original Google Sheet / file is never changed. Click a cell to edit · Enter / Tab to move · Esc to cancel.
       </p>
 
       <main className="min-h-0 flex-1 overflow-auto bg-white">

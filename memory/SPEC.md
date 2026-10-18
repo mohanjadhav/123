@@ -1,6 +1,6 @@
 # BARCODR Studio — spec
 
-EASY LABELS by HC — AzureLabel-style single-window barcode label designer (light theme). Multiple saved label templates per brand; print batches from Google Sheets / CSV / Excel.
+RAPID LABELS by MOHAN — AzureLabel-style single-window barcode label designer (light theme). Multiple saved label templates per brand; print batches from Google Sheets / CSV / Excel.
 
 ## Data model (Mongo)
 - `templates`: {id, name, brand, width_mm, height_mm, background, elements[], page_setup {paper label|a4|letter|custom, paper_w/h, orientation, cols/rows (0=auto), gap_x/y, margins, offset_x/y, order across|down, start_position}, source_id (remembered print-data sheet), created_at, updated_at}

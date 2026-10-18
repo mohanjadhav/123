@@ -85,7 +85,7 @@ export default function PrintQueue() {
         <Link to="/" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-(--app-accent)")} data-testid="queue-back-link"><ArrowLeft /> Back to designer</Link>
         <span className="h-6 w-px bg-[#E5E7EB]" />
         <span className="grid size-7 place-items-center rounded-md bg-(--app-accent) text-white"><Barcode className="size-4" /></span>
-        <h1 className="text-sm font-semibold">EASY LABELS <span className="font-normal text-[#6B7280]">by HC</span> <span className="font-normal text-[#9CA3AF]">· Print queue</span></h1>
+        <h1 className="text-sm font-semibold">RAPID LABELS <span className="font-normal text-[#6B7280]">by MOHAN</span> <span className="font-normal text-[#9CA3AF]">· Print queue</span></h1>
         <span className="ml-auto" />
         <ThemePicker />
       </header>

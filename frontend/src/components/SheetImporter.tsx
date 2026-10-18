@@ -84,12 +84,12 @@ export function SheetImporter({ sources, onImported }: {
         <span className="h-px flex-1 bg-[#E5E7EB]" /> or <span className="h-px flex-1 bg-[#E5E7EB]" />
       </div>
       <div className="grid gap-1.5">
-        <input ref={fileRef} type="file" accept=".csv,.tsv,.xlsx,.xlsm" className="hidden" data-testid="sheet-upload-input"
+        <input ref={fileRef} type="file" accept=".csv,.tsv,.xlsx,.xlsm,.xls,.ods" className="hidden" data-testid="sheet-upload-input"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ""; }} />
         <Button variant="outline" data-testid="sheet-upload-button" disabled={busy} onClick={() => fileRef.current?.click()} className="h-9 bg-white">
-          <Upload /> {upload.isPending ? "Uploading…" : "Upload CSV / Excel file"}
+          <Upload /> {upload.isPending ? "Uploading…" : "Upload Excel / LibreOffice / CSV file"}
         </Button>
-        <p className="text-[11px] text-[#6B7280]">Excel files with several tabs become one sheet per tab (great for multiple brands).</p>
+        <p className="text-[11px] text-[#6B7280]">Supports .xlsx, .xls (Excel), .ods (LibreOffice Calc) and .csv — files with several tabs become one sheet per tab (great for multiple brands).</p>
       </div>
     </div>
   );

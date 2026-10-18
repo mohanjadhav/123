@@ -4,6 +4,7 @@ import { Maximize, Minus, Plus } from "lucide-react";
 import { elementBoxStyle, Label as LabelView, Scaled } from "@/components/label/Label";
 import { Button } from "@/components/ui/button";
 import { MM_TO_PX } from "@/lib/label";
+import { uiZoom } from "@/lib/theme";
 import type { LabelElement, Mapping, Row, TemplateBase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -63,8 +64,9 @@ export function Canvas({ tpl, row, mapping, zoom, onZoom, fitZoom, selectedId, o
   const move = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
-    const dx = (e.clientX - d.sx) / (MM_TO_PX * zoom);
-    const dy = (e.clientY - d.sy) / (MM_TO_PX * zoom);
+    const k = MM_TO_PX * zoom * uiZoom(); // screen px per mm (canvas zoom × app size)
+    const dx = (e.clientX - d.sx) / k;
+    const dy = (e.clientY - d.sy) / k;
     if (!d.moved) {
       if (Math.abs(dx) < 0.25 && Math.abs(dy) < 0.25) return;
       d.moved = true;
@@ -80,7 +82,8 @@ export function Canvas({ tpl, row, mapping, zoom, onZoom, fitZoom, selectedId, o
     if (!col || !stageRef.current) return;
     e.preventDefault();
     const r = stageRef.current.getBoundingClientRect();
-    onDropField(col, round((e.clientX - r.left) / (MM_TO_PX * zoom)), round((e.clientY - r.top) / (MM_TO_PX * zoom)));
+    const k = MM_TO_PX * zoom * uiZoom();
+    onDropField(col, round((e.clientX - r.left) / k), round((e.clientY - r.top) / k));
   };
 
   return (

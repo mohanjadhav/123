@@ -40,7 +40,7 @@ export function SheetTabs({ sources, active, onSelect, testId = "sheet-tabs" }: 
         const on = s.id === active.id;
         return (
           <button key={s.id} data-testid={`${testId}-tab-${s.tab_index}`} onClick={() => !on && onSelect(s)} title={s.name}
-            className={cn("relative my-1 flex items-center rounded px-3 text-xs transition-colors duration-150",
+            className={cn("relative my-1 flex shrink-0 items-center whitespace-nowrap rounded px-3 text-xs transition-colors duration-150",
               on ? "bg-white font-semibold text-(--app-accent) shadow-[0_1px_2px_rgba(0,0,0,0.12)]" : "text-[#374151] hover:bg-white/70")}>
             {s.tab ?? s.name}
             {on && <span className="absolute inset-x-2 -bottom-1 h-0.5 rounded bg-(--app-accent)" />}
@@ -50,7 +50,7 @@ export function SheetTabs({ sources, active, onSelect, testId = "sheet-tabs" }: 
       {google && (
         <button data-testid={`${testId}-sync`} disabled={sync.isPending} onClick={() => sync.mutate(active.id)}
           title={active.workbook ? "Check the spreadsheet for new tabs" : "Find the other tabs (brands) in this spreadsheet"}
-          className="my-1 ml-1 flex items-center gap-1 rounded px-2 text-[11px] text-(--app-accent) transition-colors duration-150 hover:bg-white disabled:opacity-50">
+          className="my-1 ml-1 flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 text-[11px] text-(--app-accent) transition-colors duration-150 hover:bg-white disabled:opacity-50">
           {active.workbook ? <RefreshCw className={cn("size-3", sync.isPending && "animate-spin")} /> : <Search className="size-3" />}
           {active.workbook ? "Sync tabs" : "Find tabs"}
         </button>

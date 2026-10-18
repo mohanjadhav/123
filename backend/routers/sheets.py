@@ -134,12 +134,20 @@ async def upload_sheet(file: UploadFile = File(...)):
         except Exception as exc:
             raise HTTPException(status_code=400, detail="Could not read that Excel file") from exc
         tables = [(ws.title, [list(r) for r in ws.iter_rows(values_only=True)]) for ws in wb.worksheets]
+    elif fname.lower().endswith((".xls", ".ods")):  # old Excel / LibreOffice Calc
+        import pandas as pd
+        engine = "xlrd" if fname.lower().endswith(".xls") else "odf"
+        try:
+            frames = pd.read_excel(io.BytesIO(raw), sheet_name=None, header=None, dtype=object, engine=engine)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Could not read that spreadsheet file") from exc
+        tables = [(name, df.where(df.notna(), None).values.tolist()) for name, df in frames.items()]
     elif fname.lower().endswith((".csv", ".txt", ".tsv")):
         text = raw.decode("utf-8-sig", errors="replace")
         delim = "\t" if fname.lower().endswith(".tsv") else ","
         tables = [("", list(csv.reader(io.StringIO(text), delimiter=delim)))]
     else:
-        raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx file")
+        raise HTTPException(status_code=400, detail="Upload a .csv, .xlsx, .xls or .ods file")
     created: List[SheetSource] = []
     multi = len(tables) > 1
     batch = f"upload:{uuid.uuid4()}"

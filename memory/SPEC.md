@@ -45,3 +45,12 @@ EASY LABELS by HC — AzureLabel-style single-window barcode label designer (lig
 - Templates tpl-aura-hangtag, tpl-nordic-jar, tpl-omni-bin; source src-sample "Sample multi-brand sheet" (url "sample", 9 rows: brand_name, sku, product_title, barcode_value, price, batch_no, qr_url)
 
 No auth.
+
+## Appearance & fit (latest)
+- Appearance panel (palette button, every page header; `lib/theme.ts` + `components/ThemePicker.tsx`), saved in localStorage `el.prefs` = {theme, custom, mode, font, zoom}:
+  - Light / Dark mode (dark = CSS invert of UI on `html[data-mode=dark]`; labels/swatches/images carry `.true-color` and are re-inverted so label colours are exact; print disables filters).
+  - 13 preset accent colours + any custom colour (hover/soft shades derived with color-mix from `--app-accent`).
+  - UI font: IBM Plex Sans, Geist, DM Sans, Space Grotesk, IBM Plex Mono, Lora.
+  - App size 70–140% (−/+ and slider): `#root { zoom }` and `.app-screen` height = 100dvh/zoom so every page fills exactly one screen. Canvas drag/drop & column resize divide pointer deltas by `uiZoom()`.
+- Toolbars never overflow the window: designer toolbar shows text only for key actions (xl+), others icon+tooltip; print-data toolbar wraps onto a second line (Print / Add to queue group stays visible).
+- Local file import: .xlsx/.xlsm, .xls (xlrd), .ods LibreOffice Calc (odfpy), .csv/.tsv — each workbook tab becomes one sheet.

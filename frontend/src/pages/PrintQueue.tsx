@@ -80,8 +80,8 @@ export default function PrintQueue() {
   const scale = pg ? Math.min(2, 560 / (pg.spec.w * MM_TO_PX), 520 / (pg.spec.h * MM_TO_PX)) : 1;
 
   return (
-    <div className="flex h-screen flex-col bg-[#EEF0F3] text-[#1F2937]">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[#D9DDE3] bg-white px-3" data-testid="queue-header">
+    <div className="app-screen flex flex-col bg-[#EEF0F3] text-[#1F2937]">
+      <header className="no-scrollbar flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-[#D9DDE3] bg-white px-3 [&>*]:shrink-0" data-testid="queue-header">
         <Link to="/" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-(--app-accent)")} data-testid="queue-back-link"><ArrowLeft /> Back to designer</Link>
         <span className="h-6 w-px bg-[#E5E7EB]" />
         <span className="grid size-7 place-items-center rounded-md bg-(--app-accent) text-white"><Barcode className="size-4" /></span>

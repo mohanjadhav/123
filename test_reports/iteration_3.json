@@ -1,0 +1,94 @@
+{
+  "iteration": 3,
+  "mode": "generate",
+  "summary": "New briefing focuses entirely on appearance/fit (overflow, dark mode, accent colours, font, app-size zoom, canvas/grid interaction at non-100% zoom) and local spreadsheet import (.ods/.xlsx/.csv). Wrote 1 new backend test file (3 tests) + 7 new browser checks covering all 7 criteria in the acceptance_matrix. All artifacts pass. Did not touch seeded CORRADO V2/SAMPLE NMM data; created and deleted my own tscheck-* sources/template via API for the zoom/import checks. Reset appearance (theme-reset) at the end so the user sees the default light theme at 100%.",
+  "passed": 8,
+  "failed": 0,
+  "flaky": 0,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": false,
+  "bugs": [],
+  "action_items": [
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "Pre-existing backend test test_tscheck_sheet_upload_invalid.py asserted the old error message 'Upload a .csv or .xlsx file'; the app now correctly supports .xls/.ods too and returns 'Upload a .csv, .xlsx, .xls or .ods file' for unsupported extensions. Updated the test's expected string to match the new (intended) message - not a regression, the API behavior itself (400 + rejection, no source created) is unchanged and correct."
+    },
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "/tmp/brands.xlsx and /tmp/one.csv (referenced by older pre-existing backend tests) were missing at session start (ephemeral /tmp); recreated them with the same schemas those tests expect so the full suite could run green."
+    },
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "Two new browser checks needed a one-shot script fix after first run (theme-dark-light-mode-toggle: a plain click on 'theme-mode-dark' intermittently hit a re-rendering panel element and had to use {force:true}; theme-app-zoom-control: the zoom slider's DOM value range is 0.7-1.4, not 70-140, and the 'further decrease at min' assertion had to check the button's disabled state instead of re-clicking). Both are script-robustness fixes, not app bugs - confirmed passing after the fix."
+    }
+  ],
+  "checks": [
+    {
+      "criterion": "Nothing overflows the window on the designer (/) at 1280x720, 1366x768, 1920x1080 - all 5 key buttons fully inside viewport, no document scroll",
+      "name": "designer-no-overflow-multi-viewport",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "At each of 1280x720/1366x768/1920x1080: grid-print-button, grid-add-to-queue-button, open-print-modal-button, theme-picker-button, new-template-button all visible with bounding boxes fully within [0,0,vw,vh]; document.scrollWidth<=innerWidth and scrollHeight<=innerHeight at all three sizes."
+    },
+    {
+      "criterion": "Sheet Data page (/data/<source id>) and Print Queue page (/queue) fit one screen at 1280x720, no document-level horizontal scroll",
+      "name": "data-and-queue-pages-fit-one-screen",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "/data/src-sample: sheet-data-header visible, header/toolbar (Back to designer, Print queue, theme picker, data label select, Preview/Add to queue/Print) all on one row, scrollWidth<=innerWidth. /queue: header + toolbar fit one screen, scrollWidth<=innerWidth. Screenshots confirmed visually."
+    },
+    {
+      "criterion": "Appearance panel: Light/Dark mode toggles html[data-mode], true-color elements keep real colours, persists after reload",
+      "name": "theme-dark-light-mode-toggle",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "theme-mode-dark set html[data-mode]='dark' and computed filter 'invert(1) hue-rotate(180deg)' on <html> (pixel-sampled screenshot confirmed background truly inverted to black while the .true-color label canvas stayed near-white #fdfdfc); theme-mode-light reverted to data-mode='light'; after setting dark + page.reload(), data-mode stayed 'dark'; reset back to light for cleanup."
+    },
+    {
+      "criterion": "Accent colour presets and custom colour change --app-accent on html",
+      "name": "theme-accent-colour-and-custom",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "theme-option-orange and theme-option-indigo each changed getComputedStyle(html).getPropertyValue('--app-accent') to a new distinct value; theme-custom-color filled with '#123456' set --app-accent to exactly '#123456'; reset to theme-option-blue for cleanup."
+    },
+    {
+      "criterion": "Font change via theme-font-select updates body font-family and persists after reload",
+      "name": "theme-font-change-persists",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Selecting 'Space Grotesk' then 'Lora' via the theme-font-select combobox changed getComputedStyle(body).fontFamily to include 'space grotesk' then 'lora' respectively; after page.reload() font-family still contained 'lora'; reset to 'IBM Plex Sans' for cleanup."
+    },
+    {
+      "criterion": "App size control (theme-zoom-out/in/slider) changes theme-zoom-value 70-140% in 5% steps, content still fills one screen at 70/100/130%",
+      "name": "theme-app-zoom-control",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "theme-zoom-out clicked 6x from 100% reached 70% and the button then became disabled (correct clamp at min); theme-zoom-in x6 returned to 100%; slider set to 1.3 (raw 0.7-1.4 range) showed '130%'; at 70%, 100% and 130% scrollWidth/scrollHeight stayed <= viewport and grid-print-button remained visible; slider pushed to 1.4 clamped theme-zoom-value at '140%' (max)."
+    },
+    {
+      "criterion": "Canvas drag and print-data column resize follow the pointer correctly when app size != 100% (80% tested)",
+      "name": "canvas-drag-and-resize-at-zoom",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "On a disposable tscheck-zoom-template (created via API, deleted after), with app size set to 80%: dragging the 'Hello' text element by pointer delta (40,30)px moved its bounding box by (~40,~30)px (|diff|<6px, i.e. 1:1 screen-space, not 0.8x/1.25x scaled); after connecting the Sample sheet, dragging a grid-col-resize-* handle 60px right increased that column's <th> width by >40px. Cleanup: template deleted via DELETE /api/templates/{id}."
+    },
+    {
+      "criterion": "Local spreadsheet import UI: import-data-button label and file input accept .xlsx,.xls,.ods,.csv; uploading a multi-tab .ods works",
+      "name": "import-dialog-accepts-local-spreadsheet-formats",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "import-data-button text matched /Import \\(Google \\/ Excel \\/ LibreOffice\\)/; file input's accept attribute contained .xlsx, .xls, .ods and .csv; uploading /tmp/tscheck_import.ods (2 tabs) showed an import confirmation referencing the file/tab names. Source rows created by this check were deleted afterward via DELETE /api/sources/{id}."
+    },
+    {
+      "criterion": "Local spreadsheet import API: POST /api/sheets/upload with .ods (multi-tab) and .csv creates one source per tab with correct columns/rows and long barcode numbers stay intact; unsupported extension (.pdf) returns 400",
+      "name": "test_tscheck_local_spreadsheet_import.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /sheets/upload (2-tab .ods) -> 201, 2 sources named 'tscheck_workbook — tscheckTabOne'/'...TabTwo'; GET /sheets/copy/{id} returned columns ['name','barcode'] with barcode values '1234567890123'/'1234567890124' (no '.0'/exponent mangling). POST /sheets/upload (.csv with 13-20 digit barcode strings) -> 201, 1 source 'tscheck_barcodes'; copy rows preserved '8901234567890' and '8901234567891123456' verbatim. POST /sheets/upload (.pdf) -> 400 {'detail':'Upload a .csv, .xlsx, .xls or .ods file'}. All created sources deleted via DELETE /api/sources/{id} in test teardown."
+    }
+  ]
+}

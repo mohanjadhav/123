@@ -89,7 +89,7 @@ export function Label({ template, row = null, mapping = {}, renderElement, onBac
     <div
       data-testid={testId}
       onPointerDown={onBackgroundPointerDown}
-      className="relative overflow-hidden"
+      className="true-color relative overflow-hidden"
       style={{ width: `${template.width_mm}mm`, height: `${template.height_mm}mm`, background: template.background, color: "#0F0F10" }}
     >
       {template.elements.map((el) => {

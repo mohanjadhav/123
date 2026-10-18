@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { CopyRow, Row } from "@/lib/types";
+import { uiZoom } from "@/lib/theme";
 
 export const MIN_COL_W = 56;
 const MAX_AUTO_W = 360;
@@ -42,7 +43,8 @@ export function useColumnWidths(columns: string[], rows: Row[]) {
     e.stopPropagation();
     const startX = e.clientX;
     const startW = widthOf(col);
-    const onMove = (ev: PointerEvent) => setManual((w) => ({ ...w, [col]: Math.max(MIN_COL_W, Math.round(startW + ev.clientX - startX)) }));
+    const z = uiZoom();
+    const onMove = (ev: PointerEvent) => setManual((w) => ({ ...w, [col]: Math.max(MIN_COL_W, Math.round(startW + (ev.clientX - startX) / z)) }));
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);

@@ -18,7 +18,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: 'IBM Plex Sans', sans-serif;
+    --font-heading: var(--font-sans);
     --font-sans: 'IBM Plex Sans', sans-serif;
     --font-mono: 'IBM Plex Mono', monospace;
     --color-sidebar-ring: var(--sidebar-ring);
@@ -143,22 +143,33 @@
 }
 
 
-/* Colour themes (data-theme on <html>); --app-* drive every accent in the UI. */
-:root, [data-theme="blue"] { --app-accent: #1A73E8; --app-accent-hover: #1765CC; --app-accent-soft: #E8F0FE; --app-accent-ring: #D2E3FC; }
-[data-theme="emerald"] { --app-accent: #0F9D58; --app-accent-hover: #0B8043; --app-accent-soft: #E6F4EA; --app-accent-ring: #CEEAD6; }
-[data-theme="teal"] { --app-accent: #00897B; --app-accent-hover: #00695C; --app-accent-soft: #E0F2F1; --app-accent-ring: #B2DFDB; }
-[data-theme="purple"] { --app-accent: #7E57C2; --app-accent-hover: #5E35B1; --app-accent-soft: #EDE7F6; --app-accent-ring: #D1C4E9; }
-[data-theme="pink"] { --app-accent: #D81B60; --app-accent-hover: #AD1457; --app-accent-soft: #FCE4EC; --app-accent-ring: #F8BBD0; }
-[data-theme="red"] { --app-accent: #D93025; --app-accent-hover: #B3261E; --app-accent-soft: #FCE8E6; --app-accent-ring: #F6C9C4; }
-[data-theme="orange"] { --app-accent: #E8710A; --app-accent-hover: #C25E05; --app-accent-soft: #FEF1E6; --app-accent-ring: #FAD7B5; }
-[data-theme="graphite"] { --app-accent: #374151; --app-accent-hover: #1F2937; --app-accent-soft: #F3F4F6; --app-accent-ring: #D1D5DB; }
-:root { --primary: var(--app-accent); --ring: var(--app-accent); --accent: var(--app-accent-soft); --accent-foreground: var(--app-accent); --sidebar-primary: var(--app-accent); --sidebar-ring: var(--app-accent); }
+/* Theme: --app-accent is set from user prefs (lib/theme.ts); shades derive from it. */
+:root {
+  --app-accent: #1A73E8;
+  --app-accent-hover: color-mix(in srgb, var(--app-accent) 82%, black);
+  --app-accent-soft: color-mix(in srgb, var(--app-accent) 11%, white);
+  --app-accent-ring: color-mix(in srgb, var(--app-accent) 28%, white);
+  --ui-zoom: 1;
+  --primary: var(--app-accent); --ring: var(--app-accent); --accent: var(--app-accent-soft); --accent-foreground: var(--app-accent);
+  --sidebar-primary: var(--app-accent); --sidebar-ring: var(--app-accent);
+}
+body { font-family: var(--font-sans); }
+.no-scrollbar { scrollbar-width: none; }
+/* Whole-app size control ("window size"): zoom the app and keep it exactly one screen tall. */
+#root { zoom: var(--ui-zoom); }
+.app-screen { height: calc(100dvh / var(--ui-zoom)); }
+/* Dark mode: invert the UI, re-invert true-colour surfaces (labels, swatches, images) so print colours stay exact. */
+html[data-mode="dark"] { filter: invert(1) hue-rotate(180deg); background: #fff; } /* exactly reversible, so .true-color shows real colours */
+html[data-mode="dark"] .true-color, html[data-mode="dark"] img, html[data-mode="dark"] input[type="color"] { filter: invert(1) hue-rotate(180deg); }
+html[data-mode="dark"] .true-color img { filter: none; }
 
 /* Print engine: only the portal'd .print-root renders on paper. */
 .print-root { display: none; }
 @media print {
   html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
   /* Hide the app AND every portal (dialogs, overlays, toasts) — only labels reach the paper. */
+  html, html[data-mode="dark"] { filter: none !important; }
+  #root { zoom: 1 !important; }
   body > *:not(.print-root) { display: none !important; }
   .print-root { display: block !important; }
   .print-page { break-after: page; page-break-after: always; break-inside: avoid; box-sizing: border-box; box-shadow: none !important; }

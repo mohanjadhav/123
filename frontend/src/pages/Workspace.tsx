@@ -48,11 +48,12 @@ const toBase = (t: Template): TemplateBase => ({
 
 function ToolButton({ icon, label, onClick, disabled, testId, primary }: { icon: ReactNode; label: string; onClick: () => void; disabled?: boolean; testId: string; primary?: boolean }) {
   return (
-    <button data-testid={testId} onClick={onClick} disabled={disabled}
-      className={cn("flex h-8 items-center gap-1.5 rounded px-2.5 text-[13px] transition-colors duration-150 disabled:opacity-40 [&_svg]:size-4",
+    <button data-testid={testId} onClick={onClick} disabled={disabled} title={label} aria-label={label}
+      className={cn("flex h-8 shrink-0 items-center gap-1.5 rounded px-2 text-[13px] whitespace-nowrap transition-colors duration-150 disabled:opacity-40 [&_svg]:size-4",
         primary ? "text-(--app-accent) hover:bg-(--app-accent-soft)" : "text-[#1F2937] hover:bg-[#EEF0F3]")}>
       {icon}
-      <span className="hidden lg:inline">{label}</span>
+      {/* key actions keep their text on normal screens; the rest show text only on very wide screens */}
+      <span className={primary ? "hidden xl:inline" : "hidden min-[1760px]:inline"}>{label}</span>
     </button>
   );
 }
@@ -264,10 +265,10 @@ export default function Workspace() {
   const brands = [...new Set(templates.map((t) => t.brand))].sort();
 
   return (
-    <div className="flex h-screen flex-col bg-[#EEF0F3] text-[#1F2937]">
+    <div className="app-screen flex flex-col bg-[#EEF0F3] text-[#1F2937]">
       {/* Toolbar */}
-      <header className="flex h-12 shrink-0 items-center gap-1 border-b border-[#D9DDE3] bg-white px-2" data-testid="app-header">
-        <div className="mr-2 flex items-center gap-2 pl-1 pr-3">
+      <header className="no-scrollbar flex h-12 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-[#D9DDE3] bg-white px-2" data-testid="app-header">
+        <div className="mr-2 flex shrink-0 items-center gap-2 pl-1 pr-3">
           <span className="grid size-7 place-items-center rounded-md bg-(--app-accent) text-white"><Barcode className="size-4" /></span>
           <span className="hidden text-sm font-semibold tracking-tight md:inline">EASY LABELS <span className="font-normal text-[#6B7280]">by HC</span></span>
         </div>

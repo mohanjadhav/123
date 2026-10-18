@@ -13,7 +13,7 @@ def test_upload_invalid_extension_rejected(client: httpx.Client):
         files={"file": ("tscheck-notes.json", b'{"a": 1}', "application/json")},
     )
     assert resp.status_code == 400, resp.text
-    assert resp.json()["detail"] == "Upload a .csv or .xlsx file"
+    assert resp.json()["detail"] == "Upload a .csv, .xlsx, .xls or .ods file"
 
     after = client.get("/sources")
     assert after.status_code == 200

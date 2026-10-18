@@ -53,15 +53,15 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
 
   return (
     <section className={cn("flex shrink-0 flex-col border-t border-[#C7CCD3] bg-white", collapsed ? "h-10" : "h-[clamp(240px,38vh,450px)]")} data-testid="print-data-panel">
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[#E5E7EB] bg-[#F8F9FB] px-3">
-        <button onClick={onCollapse} data-testid="print-data-toggle" className="flex items-center gap-1.5 text-sm font-semibold text-[#1F2937]">
+      <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#E5E7EB] bg-[#F8F9FB] px-3 py-1.5" data-testid="print-data-toolbar">
+        <button onClick={onCollapse} data-testid="print-data-toggle" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-[#1F2937]">
           {collapsed ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />} Label print data
         </button>
-        <Button size="sm" data-testid="import-data-button" onClick={onOpenImport} className="ml-2 h-7 bg-(--app-accent) text-white hover:bg-(--app-accent-hover)">
-          <Import /> Import
+        <Button size="sm" data-testid="import-data-button" onClick={onOpenImport} title="Import from Google Sheets link, or a local Excel (.xlsx/.xls), LibreOffice (.ods) or CSV file" className="h-7 bg-(--app-accent) text-white hover:bg-(--app-accent-hover)">
+          <Import /> Import (Google / Excel / LibreOffice)
         </Button>
         <Select value={activeSourceId ?? NONE} onValueChange={(v: string) => onChooseSource(v === NONE ? null : v)}>
-          <SelectTrigger size="sm" className="h-7 w-56 bg-white" data-testid="sheet-source-select">
+          <SelectTrigger size="sm" className="h-7 w-48 max-w-full bg-white" data-testid="sheet-source-select">
             <FileSpreadsheet className="size-3.5 text-[#188038]" />
             <SelectValue>{(v) => sources.find((s) => s.id === v)?.name ?? "No sheet connected"}</SelectValue>
           </SelectTrigger>
@@ -74,11 +74,11 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
           <>
             <Link to={`/data/${active.id}`} onClick={onEditData} data-testid="edit-sheet-data-button"
               className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-7 bg-white text-(--app-accent)")}>
-              <PencilLine /> Open data page
+              <PencilLine /> <span className="hidden xl:inline">Open data page</span><span className="xl:hidden">Data</span>
             </Link>
             <Button size="sm" variant="outline" className="h-7 bg-white" data-testid="sheet-refresh-button" disabled={!canRefresh || refreshing} onClick={onRefresh}
               title={canRefresh ? "Pull the latest rows from Google Sheets" : "Uploaded files can't refresh — upload again to update"}>
-              <RefreshCw className={cn(refreshing && "animate-spin")} /> Refresh
+              <RefreshCw className={cn(refreshing && "animate-spin")} /> <span className="hidden xl:inline">Refresh</span>
             </Button>
             <Button size="icon-sm" variant="ghost" className="size-7" data-testid="sheet-delete-button" title="Remove this sheet"
               onClick={() => confirm(`Remove "${active.name}" from saved sheets?`) && onDeleteSource(active.id)}>
@@ -88,14 +88,14 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
           </>
         )}
         {!collapsed && rows.length > 0 && (
-          <div className="relative ml-1">
+          <div className="relative">
             <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[#9CA3AF]" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search rows" data-testid="rows-search-input" className="h-7 w-40 bg-white pl-7 text-xs" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search rows" data-testid="rows-search-input" className="h-7 w-32 bg-white pl-7 text-xs xl:w-40" />
           </div>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2" data-testid="print-data-actions">
           {columns.length > 0 && <QtyColumnSelect columns={columns} value={qtyColumn} onChange={onQtyColumn} testId="grid-qty-column-select" />}
-          <span className="text-xs text-[#4B5563]" data-testid="print-batch-status">
+          <span className="whitespace-nowrap text-xs text-[#4B5563]" data-testid="print-batch-status">
             {rows.length ? <><b>{total}</b> label{total === 1 ? "" : "s"} · {ticked}/{rows.length} rows</> : null}
           </span>
           <Button size="sm" variant="outline" className="h-7 bg-white" data-testid="open-print-modal-button" onClick={onPreview}><Eye /> Preview</Button>
@@ -117,7 +117,7 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
               <div>
                 <FileSpreadsheet className="mx-auto mb-2 size-7 text-[#188038]" />
                 <p>{active ? "This sheet has no rows." : "Connect a Google Sheet or upload a CSV / Excel file to print labels from it."}</p>
-                <Button size="sm" data-testid="rows-empty-import-button" onClick={onOpenImport} className="mt-3 bg-(--app-accent) text-white hover:bg-(--app-accent-hover)"><Import /> Import data</Button>
+                <Button size="sm" data-testid="rows-empty-import-button" onClick={onOpenImport} className="mt-3 bg-(--app-accent) text-white hover:bg-(--app-accent-hover)"><Import /> Import (Google / Excel / LibreOffice) data</Button>
               </div>
             </div>
           ) : (

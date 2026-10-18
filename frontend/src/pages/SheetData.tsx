@@ -126,16 +126,16 @@ export default function SheetData() {
   const deleteRow = (r: CopyRow) => { setRows((rs) => rs.filter((x) => x.id !== r.id)); toast.success("Row deleted (only in the app)"); };
 
   return (
-    <div className="flex h-screen flex-col bg-[#EEF0F3] text-[#1F2937]">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[#D9DDE3] bg-white px-3" data-testid="sheet-data-header">
+    <div className="app-screen flex flex-col bg-[#EEF0F3] text-[#1F2937]">
+      <header className="no-scrollbar flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-[#D9DDE3] bg-white px-3 [&>*]:shrink-0" data-testid="sheet-data-header">
         <Link to="/" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-(--app-accent)")} data-testid="back-to-designer-link">
-          <ArrowLeft /> Back to designer
+          <ArrowLeft /> <span className="hidden lg:inline">Back to designer</span>
         </Link>
         <span className="h-6 w-px bg-[#E5E7EB]" />
         <span className="grid size-7 place-items-center rounded-md bg-(--app-accent) text-white"><Barcode className="size-4" /></span>
-        <h1 className="text-sm font-semibold">EASY LABELS <span className="font-normal text-[#6B7280]">by HC</span> <span className="font-normal text-[#9CA3AF]">· Sheet data</span></h1>
+        <h1 className="hidden whitespace-nowrap text-sm font-semibold xl:block">EASY LABELS <span className="font-normal text-[#6B7280]">by HC</span> <span className="font-normal text-[#9CA3AF]">· Sheet data</span></h1>
         <Select value={sourceId} onValueChange={(v: string) => { setEditing(null); nav(`/data/${v}`); }}>
-          <SelectTrigger size="sm" className="h-8 w-64 bg-white" data-testid="sheet-data-source-select">
+          <SelectTrigger size="sm" className="h-8 w-52 bg-white" data-testid="sheet-data-source-select">
             <FileSpreadsheet className="size-3.5 text-[#188038]" />
             <SelectValue placeholder="Choose a sheet">{(v) => sources.find((s) => s.id === v)?.name ?? "Choose a sheet"}</SelectValue>
           </SelectTrigger>
@@ -144,7 +144,7 @@ export default function SheetData() {
         {copy?.edited && <span className="rounded bg-[#FEF7E0] px-2 py-0.5 text-[11px] font-medium text-[#B06000]" data-testid="sheet-edited-badge">Edited in app</span>}
         <span className={cn("ml-auto text-xs", saveState === "error" ? "text-[#D93025]" : "text-[#6B7280]")} data-testid="sheet-save-status">{copy ? SAVE_LABEL[saveState] : ""}</span>
         <Link to="/queue" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "bg-white text-(--app-accent)")} data-testid="data-queue-link">
-          <ListOrdered /> Print queue{queueCount ? ` (${queueCount})` : ""}
+          <ListOrdered /> <span className="hidden md:inline">Print queue</span>{queueCount ? ` (${queueCount})` : ""}
         </Link>
         <ThemePicker />
       </header>
@@ -165,14 +165,14 @@ export default function SheetData() {
         <QtyColumnSelect columns={columns} value={qtyColumn} onChange={(col) => update((c) => ({ ...c, qty_column: col, rows: tickByQty(c.rows, col) }))} testId="data-qty-column-select" className="h-8" />
         <div className="relative">
           <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[#9CA3AF]" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search rows" data-testid="sheet-data-search" className="h-8 w-52 bg-white pl-7 text-xs" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search rows" data-testid="sheet-data-search" className="h-8 w-36 bg-white pl-7 text-xs xl:w-52" />
         </div>
-        <span className="ml-auto text-xs text-[#4B5563]" data-testid="sheet-data-stats">
+        <span className="ml-auto whitespace-nowrap text-xs text-[#4B5563]" data-testid="sheet-data-stats">
           {rows.length} rows · {rows.filter((r) => r.selected).length} ticked · <b>{labels}</b> labels to print
         </span>
         <span className="h-6 w-px bg-[#D9DDE3]" />
         <Select value={tpl?.id ?? ""} onValueChange={(v: string) => setPickedTpl(v)}>
-          <SelectTrigger size="sm" className="h-8 w-60 bg-white" data-testid="data-label-select">
+          <SelectTrigger size="sm" className="h-8 w-48 bg-white" data-testid="data-label-select">
             <Tag className="size-3.5 text-(--app-accent)" />
             <SelectValue placeholder="Choose label">{(v) => { const t = templates.find((x) => x.id === v); return t ? `${t.brand} — ${t.name}` : "Choose label"; }}</SelectValue>
           </SelectTrigger>

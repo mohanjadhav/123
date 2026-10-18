@@ -48,7 +48,8 @@ export function paginate(rows: Row[], spec: PageSpec, ps: PageSetup): (Row | nul
   return rows.length ? pages : [];
 }
 
-export function SheetPage({ spec, ps, template, slots, mapping, outlineEmpty }: {
+export function SheetPage({ spec, ps, template, slots, mapping, outlineEmpty, pageName }: {
+  pageName?: string; // CSS named page, so mixed label sizes print in one batch
   spec: PageSpec;
   ps: PageSetup;
   template: LabelShape;
@@ -58,7 +59,7 @@ export function SheetPage({ spec, ps, template, slots, mapping, outlineEmpty }: 
 }) {
   const cells = outlineEmpty ? [...slots, ...Array<null>(Math.max(0, spec.perPage - slots.length)).fill(null)] : slots;
   return (
-    <div className="print-page relative overflow-hidden bg-white" style={{ width: `${spec.w}mm`, height: `${spec.h}mm` }}>
+    <div className="print-page relative overflow-hidden bg-white" style={{ width: `${spec.w}mm`, height: `${spec.h}mm`, page: pageName }}>
       <div
         className="absolute"
         style={{
@@ -180,5 +181,41 @@ export function PrintPreviewDialog({ open, onOpenChange, template, ps, rows, map
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export interface BatchPart {
+  key: string;
+  template: LabelShape & { id: string };
+  ps: PageSetup;
+  rows: Row[];
+  mapping: Mapping;
+}
+
+/** Pages for several jobs (each with its own label + page setup), in order. */
+export function batchPages(parts: BatchPart[]) {
+  return parts.flatMap((p) => {
+    const spec = pageSpec(p.template, p.ps);
+    return paginate(p.rows, spec, p.ps).map((slots, i) => ({ part: p, spec, slots, key: `${p.key}-${i}` }));
+  });
+}
+
+/** Print output for a batch: one named @page per label so every label keeps its own paper size. */
+export function BatchPrintPortal({ parts }: { parts: BatchPart[] }) {
+  const pages = batchPages(parts);
+  const sizes = new Map(pages.map((pg) => [`lbl-${pg.part.template.id}`, pg.spec]));
+  const first = pages[0]?.spec;
+  const css = [
+    first ? `@page { size: ${first.w}mm ${first.h}mm; margin: 0; }` : "",
+    ...[...sizes].map(([name, sp]) => `@page ${name} { size: ${sp.w}mm ${sp.h}mm; margin: 0; }`),
+  ].join("\n");
+  return createPortal(
+    <div className="print-root" data-testid="print-root">
+      <style>{css}</style>
+      {pages.map((pg) => (
+        <SheetPage key={pg.key} spec={pg.spec} ps={pg.part.ps} template={pg.part.template} slots={pg.slots} mapping={pg.part.mapping} pageName={`lbl-${pg.part.template.id}`} />
+      ))}
+    </div>,
+    document.body,
   );
 }

@@ -23,6 +23,7 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("id", ASCENDING)], name="id", unique=True),
         IndexModel([("updated_at", DESCENDING)], name="updated_desc"),
     ],
+    "print_queue": [IndexModel([("id", ASCENDING)], name="id", unique=True), IndexModel([("created_at", ASCENDING)], name="created")],
     "sheet_copies": [IndexModel([("source_id", ASCENDING)], name="source_id", unique=True)],
     "sheet_uploads": [IndexModel([("id", ASCENDING)], name="id", unique=True)],
     "sheet_sources": [

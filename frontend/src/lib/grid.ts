@@ -70,3 +70,14 @@ export function expandRows(rows: CopyRow[], qtyColumn: string | null | undefined
 
 const QTY_HINT = /(qty|quantity|copies|print|labels?|nos|count|pcs)/i;
 export const suggestQtyColumn = (columns: string[]) => columns.find((c) => QTY_HINT.test(c)) ?? null;
+
+// ---- Tick rules: a row is ticked only when it has a quantity > 0.
+/** Re-tick every row from its quantity (used when the quantity source changes). */
+export const tickByQty = (rows: CopyRow[], qtyColumn: string | null): CopyRow[] =>
+  rows.map((r) => ({ ...r, selected: rowQty(r, qtyColumn) > 0 }));
+/** Manual quantity typed: > 0 ticks, 0 unticks. */
+export const withManualQty = (r: CopyRow, qty: number): CopyRow => ({ ...r, qty, selected: qty > 0 });
+/** Tick/untick by hand; ticking a manual row with qty 0 makes it 1 so it prints. */
+export const withTick = (r: CopyRow, on: boolean, qtyColumn: string | null): CopyRow => ({
+  ...r, selected: on, qty: on && !qtyColumn && r.qty < 1 ? 1 : r.qty,
+});

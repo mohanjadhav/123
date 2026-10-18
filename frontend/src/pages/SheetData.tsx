@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import type { KeyboardEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Barcode, CopyPlus, Eye, FileSpreadsheet, Info, Plus, Printer, RefreshCw, RotateCcw, Search, Tag, Trash2 } from "lucide-react";
+import { ArrowLeft, Barcode, CopyPlus, Eye, ListOrdered, ListPlus, FileSpreadsheet, Info, Plus, Printer, RefreshCw, RotateCcw, Search, Tag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ThemePicker } from "@/components/ThemePicker";
 import { ColumnHeader } from "@/components/workspace/ColumnHeader";
@@ -15,11 +15,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiErrorDetail } from "@/lib/api";
-import { expandRows, rowQty, useColumnWidths } from "@/lib/grid";
+import { expandRows, rowQty, tickByQty, useColumnWidths, withManualQty, withTick } from "@/lib/grid";
 import { QtyColumnSelect } from "@/components/workspace/QtyColumnSelect";
 import { autoMapping, fetchSources, fetchTemplates, placeholdersOf } from "@/lib/label";
 import type { CopyRow, Row } from "@/lib/types";
 import { useSheetCopy } from "@/lib/useSheetCopy";
+import { queueItemsFrom, useAddToQueue, useQueueCount } from "@/lib/queue";
 import { cn } from "@/lib/utils";
 
 const SAVE_LABEL = { idle: "All changes saved", pending: "Saving…", saving: "Saving…", error: "Save failed — retrying on next edit" } as const;
@@ -65,6 +66,14 @@ export default function SheetData() {
   const mapping = useMemo(() => autoMapping(placeholders, columns), [placeholders, columns]);
   const missing = columns.length ? placeholders.filter((p) => !mapping[p]) : [];
   const printRows = expandRows(rows, qtyColumn);
+  const queueCount = useQueueCount();
+  const addToQueue = useAddToQueue(() => nav("/queue"));
+  const queueTicked = () => {
+    if (!tpl) return toast.error("Choose a label first");
+    const items = queueItemsFrom(rows, qtyColumn);
+    if (!items.length) return toast.error("Tick rows with a quantity first");
+    addToQueue.mutate({ template_id: tpl.id, source_id: sourceId || null, items });
+  };
   const runPrint = () => {
     if (!tpl) return toast.error("Create a label in the designer first");
     if (!printRows.length) return toast.error("Tick at least one row to print");
@@ -80,7 +89,11 @@ export default function SheetData() {
   const commit = () => {
     if (!editing) return;
     const row = rows.find((r) => r.id === editing.id);
-    if (row && (row.cells[editing.col] ?? "") !== draft) patchRow(row.id, { cells: { ...row.cells, [editing.col]: draft } });
+    if (row && (row.cells[editing.col] ?? "") !== draft) {
+      const next = { ...row, cells: { ...row.cells, [editing.col]: draft } };
+      // Editing the quantity column re-ticks the row from its new quantity.
+      patchRow(row.id, editing.col === qtyColumn ? { cells: next.cells, selected: rowQty(next, qtyColumn) > 0 } : { cells: next.cells });
+    }
     setEditing(null);
   };
   const onCellKey = (e: KeyboardEvent<HTMLInputElement>, r: CopyRow, col: string) => {
@@ -100,7 +113,7 @@ export default function SheetData() {
   };
 
   const addRow = () => {
-    const row: CopyRow = { id: crypto.randomUUID(), cells: Object.fromEntries(columns.map((c) => [c, ""])), qty: 1, selected: true, origin: null };
+    const row: CopyRow = { id: crypto.randomUUID(), cells: Object.fromEntries(columns.map((c) => [c, ""])), qty: 0, selected: false, origin: null };
     setRows((rs) => [...rs, row]);
     setQ("");
     if (columns[0]) { setEditing({ id: row.id, col: columns[0] }); setDraft(""); }
@@ -129,6 +142,9 @@ export default function SheetData() {
         </Select>
         {copy?.edited && <span className="rounded bg-[#FEF7E0] px-2 py-0.5 text-[11px] font-medium text-[#B06000]" data-testid="sheet-edited-badge">Edited in app</span>}
         <span className={cn("ml-auto text-xs", saveState === "error" ? "text-[#D93025]" : "text-[#6B7280]")} data-testid="sheet-save-status">{copy ? SAVE_LABEL[saveState] : ""}</span>
+        <Link to="/queue" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "bg-white text-(--app-accent)")} data-testid="data-queue-link">
+          <ListOrdered /> Print queue{queueCount ? ` (${queueCount})` : ""}
+        </Link>
         <ThemePicker />
       </header>
 
@@ -145,7 +161,7 @@ export default function SheetData() {
           onClick={() => confirm("Discard all edits, quantities and ticks and reload the original sheet data?") && refresh.mutate("replace")}>
           <RotateCcw /> Reset to original
         </Button>
-        <QtyColumnSelect columns={columns} value={qtyColumn} onChange={(col) => update((c) => ({ ...c, qty_column: col }))} testId="data-qty-column-select" className="h-8" />
+        <QtyColumnSelect columns={columns} value={qtyColumn} onChange={(col) => update((c) => ({ ...c, qty_column: col, rows: tickByQty(c.rows, col) }))} testId="data-qty-column-select" className="h-8" />
         <div className="relative">
           <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[#9CA3AF]" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search rows" data-testid="sheet-data-search" className="h-8 w-52 bg-white pl-7 text-xs" />
@@ -162,6 +178,7 @@ export default function SheetData() {
           <SelectContent>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.brand} — {t.name}</SelectItem>)}</SelectContent>
         </Select>
         <Button size="sm" variant="outline" className="bg-white" data-testid="data-preview-button" disabled={!tpl || !copy} onClick={() => setPreviewOpen(true)}><Eye /> Preview</Button>
+        <Button size="sm" variant="outline" className="bg-white text-(--app-accent)" data-testid="data-add-to-queue-button" disabled={!tpl || !labels} onClick={queueTicked}><ListPlus /> Add to queue</Button>
         <Button size="sm" className="bg-[#188038] text-white hover:bg-[#146C2E]" data-testid="data-print-button" disabled={!tpl || !copy} onClick={runPrint}><Printer /> Print</Button>
       </div>
 
@@ -189,7 +206,7 @@ export default function SheetData() {
               <tr>
                 <th className="border-b border-r border-[#E5E7EB] px-2 py-1.5 text-center font-medium text-[#9CA3AF]">#</th>
                 <th className="border-b border-r border-[#E5E7EB] px-2 py-1.5 text-center">
-                  <Checkbox data-testid="sheet-data-select-all" checked={allOn} onCheckedChange={() => { const ids = new Set(visible.map((v) => v.r.id)); setRows((rs) => rs.map((r) => (ids.has(r.id) ? { ...r, selected: !allOn } : r))); }} />
+                  <Checkbox data-testid="sheet-data-select-all" checked={allOn} onCheckedChange={() => { const ids = new Set(visible.map((v) => v.r.id)); setRows((rs) => rs.map((r) => (ids.has(r.id) ? withTick(r, !allOn, qtyColumn) : r))); }} />
                 </th>
                 <th className="border-b border-r border-[#E5E7EB] px-2 py-1.5 font-semibold" title={qtyColumn ? `Read from column "${qtyColumn}"` : "Type the number of labels"}>
                   Qty{qtyColumn && <span className="ml-1 text-[9px] font-normal text-(--app-accent)">auto</span>}
@@ -206,7 +223,7 @@ export default function SheetData() {
                     <td className={cn("border-b border-r border-[#EEF0F2] bg-[#F9FAFB] px-2 py-1 text-center font-mono text-[10px] text-[#9CA3AF]", !orig && "border-l-[3px] border-l-[#188038]")}
                       title={orig ? undefined : "Added in app"}>{i + 1}</td>
                     <td className="border-b border-r border-[#EEF0F2] px-2 py-1 text-center">
-                      <Checkbox data-testid={`data-row-checkbox-${i}`} checked={r.selected} onCheckedChange={() => patchRow(r.id, { selected: !r.selected })} />
+                      <Checkbox data-testid={`data-row-checkbox-${i}`} checked={r.selected} onCheckedChange={() => setRows((rs) => rs.map((x) => (x.id === r.id ? withTick(x, !r.selected, qtyColumn) : x)))} />
                     </td>
                     <td className="border-b border-r border-[#EEF0F2] px-1 py-0.5">
                       {qtyColumn ? (
@@ -214,8 +231,8 @@ export default function SheetData() {
                           {rowQty(r, qtyColumn) || "—"}
                         </span>
                       ) : (
-                        <input type="number" min={1} data-testid={`data-row-qty-${i}`} value={r.qty}
-                          onChange={(e) => patchRow(r.id, { qty: Math.max(1, Math.min(9999, parseInt(e.target.value) || 1)) })}
+                        <input type="number" min={0} data-testid={`data-row-qty-${i}`} value={r.qty || ""} placeholder="0"
+                          onChange={(e) => setRows((rs) => rs.map((x) => (x.id === r.id ? withManualQty(x, Math.max(0, Math.min(9999, parseInt(e.target.value) || 0))) : x)))}
                           className="h-6 w-full rounded border border-transparent bg-transparent px-1.5 font-mono text-xs outline-none focus:border-(--app-accent) focus:bg-white" />
                       )}
                     </td>

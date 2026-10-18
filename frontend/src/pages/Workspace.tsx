@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Barcode, Copy, Table2, Eye, FilePlus2, FolderOpen, Printer, Redo2, Save, Settings2, SlidersHorizontal, Undo2, X } from "lucide-react";
+import { Barcode, Copy, ListOrdered, Table2, Eye, FilePlus2, FolderOpen, Printer, Redo2, Save, Settings2, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { SheetImporter } from "@/components/SheetImporter";
 import { ThemePicker } from "@/components/ThemePicker";
@@ -16,7 +16,8 @@ import type { Tool } from "@/components/workspace/LeftPanel";
 import { PrintPortal, PrintPreviewDialog } from "@/components/workspace/PrintPreview";
 import { RefreshDialog } from "@/components/workspace/RefreshDialog";
 import { useSheetCopy } from "@/lib/useSheetCopy";
-import { expandRows, rowQty } from "@/lib/grid";
+import { queueItemsFrom, useAddToQueue, useQueueCount } from "@/lib/queue";
+import { expandRows, rowQty, tickByQty, withManualQty, withTick } from "@/lib/grid";
 import { PageSetupDialog } from "@/components/workspace/PageSetupDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiDelete, apiErrorDetail, apiPost, apiPut } from "@/lib/api";
@@ -201,6 +202,15 @@ export default function Workspace() {
   const mapping = useMemo(() => autoMapping(placeholders, columns), [placeholders, columns]);
   const missing = columns.length ? placeholders.filter((p) => !mapping[p]) : [];
   const qtyColumn = copy?.qty_column ?? null;
+  const queueCount = useQueueCount();
+  const addToQueue = useAddToQueue(() => nav("/queue"));
+  const queueTicked = () => {
+    if (!tpl) return;
+    const items = queueItemsFrom(copyRows, qtyColumn);
+    if (!items.length) return toast.error("Tick rows with a quantity first");
+    if (draft?.dirty) save.mutate(); // queue uses the saved label design
+    addToQueue.mutate({ template_id: tpl.id, source_id: source?.id ?? null, items });
+  };
   const printRows = expandRows(copyRows, qtyColumn);
   const previewRow = copyRows.find((r) => r.selected && rowQty(r, qtyColumn) > 0)?.cells ?? rows[0] ?? null;
 
@@ -269,6 +279,7 @@ export default function Workspace() {
         <ToolButton testId="redo-button" icon={<Redo2 />} label="Redo" onClick={redo} disabled={!draft?.future.length} />
         <ToolButton testId="sheet-data-page-button" icon={<Table2 />} label="Sheet data" primary
           onClick={() => { if (draft?.dirty) save.mutate(); nav(source ? `/data/${source.id}` : "/data"); }} />
+        <ToolButton testId="print-queue-button" icon={<ListOrdered />} label={`Print queue${queueCount ? ` (${queueCount})` : ""}`} primary onClick={() => nav("/queue")} />
         <ToolButton testId="page-setup-button" icon={<Settings2 />} label="Page setup" onClick={() => setDialog("pagesetup")} disabled={!tpl} />
         <ToolButton testId="label-properties-button" icon={<SlidersHorizontal />} label="Label properties" onClick={() => setSelectedId(null)} disabled={!tpl} />
         <span className="mx-1 h-6 w-px bg-[#E5E7EB]" />
@@ -318,11 +329,11 @@ export default function Workspace() {
             columns={columns} rows={copyRows} edited={!!copy?.edited} loading={copyQ.isFetching} error={copyQ.isError ? apiErrorDetail(copyQ.error, "Could not load sheet") : null}
             canRefresh={canRefresh} refreshing={refreshCopy.isPending} onRefresh={onRefresh}
             onOpenImport={() => setDialog("import")}
-            onToggle={(ids, on) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (ids.includes(r.id) ? { ...r, selected: on } : r)) }))}
-            qtyColumn={qtyColumn} onQtyColumn={(col) => updateCopy((c) => ({ ...c, qty_column: col }))}
-            onQty={(id, qty) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (r.id === id ? { ...r, qty } : r)) }))}
+            onToggle={(ids, on) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (ids.includes(r.id) ? withTick(r, on, c.qty_column) : r)) }))}
+            qtyColumn={qtyColumn} onQtyColumn={(col) => updateCopy((c) => ({ ...c, qty_column: col, rows: tickByQty(c.rows, col) }))}
+            onQty={(id, qty) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (r.id === id ? withManualQty(r, qty) : r)) }))}
             onEditData={() => { if (draft?.dirty) save.mutate(); }}
-            onPrintRow={(r) => runPrint([r], true)} onPreview={() => setDialog("preview")} onPrint={() => runPrint(printRows)}
+            onPrintRow={(r) => runPrint([r], true)} onPreview={() => setDialog("preview")} onPrint={() => runPrint(printRows)} onQueue={queueTicked}
             collapsed={gridCollapsed} onCollapse={() => setGridCollapsed((c) => !c)} />
         </div>
       ) : (

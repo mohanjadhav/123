@@ -119,3 +119,33 @@ export interface CopyRefreshResult {
   sheet: SheetCopy;
   added: number;
 }
+
+// Print queue (backend QueueJob): spooled jobs printed together in one batch.
+export interface QueueItem {
+  cells: Record<string, string>;
+  qty: number;
+  selected: boolean;
+}
+
+export interface QueueJobCreate {
+  template_id: string;
+  source_id: string | null;
+  items: QueueItem[];
+}
+
+export interface QueueJobUpdate {
+  selected?: boolean;
+  items?: QueueItem[];
+}
+
+export interface QueueJob {
+  id: string;
+  template_id: string;
+  template_name: string;
+  template_brand: string;
+  source_id: string | null;
+  source_name: string;
+  items: QueueItem[];
+  selected: boolean;
+  created_at: string;
+}

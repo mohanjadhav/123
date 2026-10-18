@@ -105,8 +105,8 @@ class SheetData(BaseModel):
 class CopyRow(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     cells: dict[str, str] = {}
-    qty: int = Field(default=1, ge=1, le=9999)
-    selected: bool = True
+    qty: int = Field(default=0, ge=0, le=9999)  # manual quantity (0 = not printed)
+    selected: bool = False  # ticked only when the row has a quantity > 0
     origin: Optional[str] = None  # signature of the Google/original row it came from (None = added in app)
 
 
@@ -129,3 +129,33 @@ class CopyRefreshRequest(BaseModel):
 class CopyRefreshResult(BaseModel):
     sheet: SheetCopy
     added: int
+
+
+class QueueItem(BaseModel):
+    cells: dict[str, str]
+    qty: int = Field(default=1, ge=1, le=9999)
+    selected: bool = True
+
+
+class QueueJobCreate(BaseModel):
+    template_id: str
+    source_id: Optional[str] = None
+    items: List[QueueItem] = Field(min_length=1)
+
+
+class QueueJobUpdate(BaseModel):
+    selected: Optional[bool] = None
+    items: Optional[List[QueueItem]] = None
+
+
+class QueueJob(BaseModel):
+    """A spooled print job: a snapshot of rows + quantities, printed later together with other jobs."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    template_id: str
+    template_name: str
+    template_brand: str
+    source_id: Optional[str] = None
+    source_name: str = ""
+    items: List[QueueItem]
+    selected: bool = True
+    created_at: datetime = Field(default_factory=_now)

@@ -213,9 +213,26 @@ async def _original(source_id: str) -> SheetData:
     return await fetch_sheet(SheetFetchRequest(url=src["url"]))
 
 
-def _fresh_copy(source_id: str, data: SheetData) -> SheetCopy:
-    rows = [CopyRow(cells=r, origin=_sig(r)) for r in data.rows]
-    return SheetCopy(source_id=source_id, columns=data.columns, rows=rows)
+def _sheet_qty(cells: dict, qty_column: str | None) -> int:
+    """Quantity read from the quantity column ("2", "2.0", "1,000"); blank/invalid/<=0 -> 0."""
+    if not qty_column:
+        return 0
+    try:
+        n = int(float(str(cells.get(qty_column, "")).replace(",", "").strip()))
+    except ValueError:
+        return 0
+    return min(max(n, 0), 9999)
+
+
+def _new_row(cells: dict, qty_column: str | None) -> CopyRow:
+    # Rows start unticked; with a quantity column, rows with qty > 0 are ticked.
+    return CopyRow(cells=cells, origin=_sig(cells), selected=_sheet_qty(cells, qty_column) > 0)
+
+
+def _fresh_copy(source_id: str, data: SheetData, qty_column: str | None = None) -> SheetCopy:
+    qc = qty_column if qty_column in data.columns else None
+    rows = [_new_row(r, qc) for r in data.rows]
+    return SheetCopy(source_id=source_id, columns=data.columns, rows=rows, qty_column=qc)
 
 
 async def _store(copy: SheetCopy) -> SheetCopy:
@@ -249,14 +266,11 @@ async def refresh_copy(source_id: str, body: CopyRefreshRequest):
     data = await _original(source_id)
     doc = await db.sheet_copies.find_one({"source_id": source_id}, {"_id": 0})
     if body.mode == "replace" or not doc:
-        fresh = _fresh_copy(source_id, data)
-        qc = (doc or {}).get("qty_column")
-        fresh.qty_column = qc if qc in fresh.columns else None  # keep the quantity-column setting
-        copy = await _store(fresh)
+        copy = await _store(_fresh_copy(source_id, data, (doc or {}).get("qty_column")))  # keeps qty-column setting
         return CopyRefreshResult(sheet=copy, added=len(copy.rows))
     current = SheetCopy(**doc)
     known = {r.origin for r in current.rows if r.origin}
-    new_rows = [CopyRow(cells=r, origin=_sig(r)) for r in data.rows if _sig(r) not in known]
+    new_rows = [_new_row(r, current.qty_column) for r in data.rows if _sig(r) not in known]
     columns = current.columns + [c for c in data.columns if c not in current.columns]
     copy = SheetCopy(source_id=source_id, columns=columns, rows=current.rows + new_rows, qty_column=current.qty_column,
                      edited=current.edited, updated_at=datetime.now(timezone.utc))

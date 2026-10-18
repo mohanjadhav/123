@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronUp, Eye, FileSpreadsheet, Import, PencilLine, Printer, RefreshCw, Search, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, FileSpreadsheet, Import, ListPlus, PencilLine, Printer, RefreshCw, Search, Trash2 } from "lucide-react";
 import { ColumnHeader } from "@/components/workspace/ColumnHeader";
 import { SheetTabs } from "@/components/workspace/SheetTabs";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 const NONE = "__none__";
 
 export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSource, columns, rows, edited, loading, error, canRefresh, refreshing, onRefresh, onOpenImport,
-  onToggle, onQty, qtyColumn, onQtyColumn, onPrintRow, onPreview, onPrint, collapsed, onCollapse, onEditData }: {
+  onToggle, onQty, qtyColumn, onQtyColumn, onPrintRow, onPreview, onPrint, onQueue, collapsed, onCollapse, onEditData }: {
   sources: SheetSource[];
   activeSourceId: string | null;
   onChooseSource: (id: string | null) => void;
@@ -36,6 +36,7 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
   onPrintRow: (r: Row) => void;
   onPreview: () => void;
   onPrint: () => void;
+  onQueue: () => void;
   collapsed: boolean;
   onCollapse: () => void;
   onEditData: () => void;
@@ -97,6 +98,8 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
             {rows.length ? <><b>{total}</b> label{total === 1 ? "" : "s"} · {ticked}/{rows.length} rows</> : null}
           </span>
           <Button size="sm" variant="outline" className="h-7 bg-white" data-testid="open-print-modal-button" onClick={onPreview}><Eye /> Preview</Button>
+          <Button size="sm" variant="outline" className="h-7 bg-white text-(--app-accent)" data-testid="grid-add-to-queue-button" disabled={!total} onClick={onQueue}
+            title="Add the ticked labels to the print queue, to print together with other sheets"><ListPlus /> Add to queue</Button>
           <Button size="sm" className="h-7 bg-[#188038] text-white hover:bg-[#146C2E]" data-testid="grid-print-button" onClick={onPrint}><Printer /> Print</Button>
         </div>
       </div>
@@ -151,8 +154,8 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
                           {rowQty(r, qtyColumn) || "—"}
                         </span>
                       ) : (
-                        <input type="number" min={1} data-testid={`row-qty-input-${i}`} value={r.qty}
-                          onChange={(e) => onQty(r.id, Math.max(1, Math.min(9999, parseInt(e.target.value) || 1)))}
+                        <input type="number" min={0} data-testid={`row-qty-input-${i}`} value={r.qty || ""} placeholder="0"
+                          onChange={(e) => onQty(r.id, Math.max(0, Math.min(9999, parseInt(e.target.value) || 0)))}
                           className="h-6 w-full rounded border border-transparent bg-transparent px-1.5 font-mono text-xs outline-none focus:border-(--app-accent) focus:bg-white" />
                       )}
                     </td>

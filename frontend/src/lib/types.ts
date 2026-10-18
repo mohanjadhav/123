@@ -76,6 +76,7 @@ export interface TemplateBase {
   background_image: string; // full-label background picture
   background_fit: "cover" | "contain" | "fill";
   background_opacity: number;
+  pinned: boolean; // shown first in the Open label list
   elements: LabelElement[];
   source_id: string | null;
   page_setup: PageSetup;

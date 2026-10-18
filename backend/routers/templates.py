@@ -4,7 +4,8 @@ from typing import List
 import logging
 
 from fastapi import APIRouter, HTTPException
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
+from pymongo import ReturnDocument
 
 from lib.db import db
 from models.labels import Template, TemplateBase
@@ -67,3 +68,17 @@ async def delete_template(id: str):
     res = await db.templates.delete_one({"id": id})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Template not found")
+
+
+class PinBody(BaseModel):
+    pinned: bool
+
+
+@router.patch("/templates/{template_id}/pin", response_model=Template)
+async def pin_template(template_id: str, body: PinBody):
+    """Pin / unpin without touching updated_at, so unpinned labels go back to their usual place."""
+    doc = await db.templates.find_one_and_update({"id": template_id}, {"$set": {"pinned": body.pinned}},
+                                                 projection={"_id": 0}, return_document=ReturnDocument.AFTER)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return Template(**doc)

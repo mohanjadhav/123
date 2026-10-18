@@ -27,7 +27,7 @@ import { queueItemsFrom, useAddToQueue, useQueueCount } from "@/lib/queue";
 import { expandRows, rowQty, tickByQty, withQty, withTick } from "@/lib/grid";
 import { PageSetupDialog } from "@/components/workspace/PageSetupDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { apiDelete, apiErrorDetail, apiPost, apiPut } from "@/lib/api";
+import { apiDelete, apiErrorDetail, apiPatch, apiPost, apiPut } from "@/lib/api";
 import { autoMapping, fetchSources, fetchTemplates, MM_TO_PX, newElement, placeholdersOf } from "@/lib/label";
 import type { LabelElement, Row, SheetSource, Template, TemplateBase } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -51,7 +51,7 @@ const round = (n: number) => Math.round(n * 2) / 2;
 const fitZoomFor = (t: TemplateBase) => Math.max(0.3, Math.min(5, Math.min(560 / (t.width_mm * MM_TO_PX), 300 / (t.height_mm * MM_TO_PX))));
 const toBase = (t: Template): TemplateBase => ({
   name: t.name, brand: t.brand, width_mm: t.width_mm, height_mm: t.height_mm, background: t.background, elements: t.elements, source_id: t.source_id, page_setup: t.page_setup,
-  background_image: t.background_image ?? "", background_fit: t.background_fit ?? "cover", background_opacity: t.background_opacity ?? 1,
+  background_image: t.background_image ?? "", background_fit: t.background_fit ?? "cover", background_opacity: t.background_opacity ?? 1, pinned: t.pinned ?? false,
 });
 
 function ToolButton({ icon, label, onClick, disabled, testId, primary }: { icon: ReactNode; label: string; onClick: () => void; disabled?: boolean; testId: string; primary?: boolean }) {
@@ -159,15 +159,16 @@ export default function Workspace() {
   };
   // rename / re-brand from the Open label cards: saves only name + brand on top of the stored label
   const rename = useMutation({
-    mutationFn: ({ id, name, brand }: { id: string; name: string; brand: string }) => {
+    mutationFn: ({ id, ...patch }: { id: string; name?: string; brand?: string; pinned?: boolean }) => {
       const t = templates.find((x) => x.id === id);
       if (!t) throw new Error("Label not found");
-      return putTemplate(id, { ...toBase(t), name, brand });
+      if (patch.pinned !== undefined && patch.name === undefined) return apiPatch<Template>(`/templates/${id}/pin`, { pinned: patch.pinned });
+      return putTemplate(id, { ...toBase(t), ...patch });
     },
-    onSuccess: (saved) => {
+    onSuccess: (saved, vars) => {
       syncSaved(saved);
-      setDrafts((d) => (d[saved.id] ? { ...d, [saved.id]: { ...d[saved.id], tpl: { ...d[saved.id].tpl, name: saved.name, brand: saved.brand } } } : d));
-      toast.success(`Renamed to "${saved.name}" · ${saved.brand}`);
+      setDrafts((d) => (d[saved.id] ? { ...d, [saved.id]: { ...d[saved.id], tpl: { ...d[saved.id].tpl, name: saved.name, brand: saved.brand, pinned: saved.pinned } } } : d));
+      toast.success(vars.pinned !== undefined ? (saved.pinned ? `Pinned "${saved.name}" to the top` : `Unpinned "${saved.name}"`) : `Renamed to "${saved.name}" · ${saved.brand}`);
     },
     onError: (e) => toast.error("Could not rename label", { description: apiErrorDetail(e, "The server did not answer — try again.") }),
   });
@@ -456,6 +457,7 @@ export default function Workspace() {
         loading={templatesQ.isFetching && !templates.length} error={templatesQ.isError ? apiErrorDetail(templatesQ.error, "Could not load labels") : null} onRetry={() => templatesQ.refetch()} onOpen={openTab}
         onCreate={createLinked} creating={create.isPending} currentId={currentId} brands={brands}
         onRename={(id, name, brand) => rename.mutateAsync({ id, name, brand })}
+        onTogglePin={(id, pinned) => rename.mutate({ id, pinned })}
         onDuplicate={(id) => duplicate.mutate(id)} onDelete={(t) => confirm(`Delete "${t.name}"?`) && remove.mutate(t.id)} />
       <Dialog open={dialog === "import"} onOpenChange={(o) => setDialog(o ? "import" : null)}>
         <DialogContent data-testid="import-dialog">

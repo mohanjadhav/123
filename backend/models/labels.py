@@ -81,6 +81,7 @@ class TemplateBase(BaseModel):
     background_image: str = ""  # full-label background picture (library URL, link or {{column}})
     background_fit: Literal["cover", "contain", "fill"] = "cover"
     background_opacity: float = Field(default=1, ge=0, le=1)
+    pinned: bool = False  # shown first in the Open label list
     elements: List[LabelElement] = []
     source_id: Optional[str] = None  # remembered print-data sheet
     page_setup: PageSetup = Field(default_factory=PageSetup)

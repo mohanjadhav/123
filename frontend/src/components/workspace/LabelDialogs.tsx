@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, Copy, FolderOpen, Pencil, Search, Trash2, X } from "lucide-react";
+import { Check, Copy, FolderOpen, Pencil, Pin, PinOff, Search, Trash2, X } from "lucide-react";
 import { Label as LabelView, Scaled } from "@/components/label/Label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,6 +27,7 @@ export function starterToTemplate(starter: Starter, opts: { name?: string; brand
     background_image: "",
     background_fit: "cover",
     background_opacity: 1,
+    pinned: false,
   };
 }
 
@@ -125,8 +126,9 @@ function RenameForm({ t, brands, onRename, onDone }: { t: Template; brands: stri
   );
 }
 
-export function OpenLabelDialog({ open, onOpenChange, templates, loading, error, onRetry, onOpen, onDuplicate, onDelete, onCreate, creating, currentId, brands, onRename }: {
+export function OpenLabelDialog({ open, onOpenChange, templates, loading, error, onRetry, onOpen, onDuplicate, onDelete, onCreate, creating, currentId, brands, onRename, onTogglePin }: {
   open: boolean;
+  onTogglePin: (id: string, pinned: boolean) => void;
   brands: string[];
   onRename: (id: string, name: string, brand: string) => Promise<unknown>;
   onCreate: (t: TemplateBase) => void;
@@ -144,7 +146,10 @@ export function OpenLabelDialog({ open, onOpenChange, templates, loading, error,
   const [q, setQ] = useState("");
   // all labels in one grid, most recently edited first (the list from the server is already sorted)
   const [editing, setEditing] = useState<string | null>(null);
-  const shown = useMemo(() => templates.filter((t) => !q || `${t.name} ${t.brand}`.toLowerCase().includes(q.toLowerCase())), [templates, q]);
+  const shown = useMemo(() => {
+    const hits = templates.filter((t) => !q || `${t.name} ${t.brand}`.toLowerCase().includes(q.toLowerCase()));
+    return [...hits.filter((t) => t.pinned), ...hits.filter((t) => !t.pinned)]; // pinned first, then most recently edited
+  }, [templates, q]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -181,7 +186,7 @@ export function OpenLabelDialog({ open, onOpenChange, templates, loading, error,
           {loading && <p className="py-6 text-center text-sm text-[#6B7280]" data-testid="open-label-loading">Loading labels…</p>}
           {!loading && !error && shown.length === 0 && <p className="py-6 text-center text-sm text-[#6B7280]">{q ? "No labels match your search." : "No labels yet — create one with New label."}</p>}
           {!loading && <p className="mb-2 text-[11px] text-[#9CA3AF]" data-testid="open-label-count">{templates.length} label{templates.length === 1 ? "" : "s"} saved</p>}
-          <div className="grid grid-cols-3 gap-2 md:grid-cols-5" data-testid="open-label-grid">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="open-label-grid">
             {shown.map((t) => (
               <div key={t.id} data-testid={`template-card-${t.id}`} className={cn("group overflow-hidden rounded-lg border bg-white transition-[border-color,box-shadow] duration-150 hover:border-(--app-accent) hover:shadow-md", t.id === currentId ? "border-(--app-accent) ring-1 ring-(--app-accent)" : "border-[#D9DDE3]")}>
                 <button className="relative grid h-20 w-full place-items-center bg-[#F1F3F4]" onClick={() => onOpen(t.id)} data-testid={`open-template-${t.id}`} title={`Open ${t.name}`}>
@@ -189,6 +194,7 @@ export function OpenLabelDialog({ open, onOpenChange, templates, loading, error,
                     <LabelView template={t} />
                   </Scaled>
                   {t.id === currentId && <span className="absolute left-1.5 top-1.5 rounded bg-(--app-accent) px-1.5 py-0.5 text-[9px] font-semibold text-white">IN USE</span>}
+                  {t.pinned && <span className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-[#F9AB00] text-white shadow" title="Pinned" data-testid={`pinned-badge-${t.id}`}><Pin className="size-3" /></span>}
                 </button>
                 {editing === t.id ? <RenameForm t={t} brands={brands} onRename={onRename} onDone={() => setEditing(null)} /> : (<>
                 <div className="px-2.5 pt-1.5">
@@ -197,6 +203,8 @@ export function OpenLabelDialog({ open, onOpenChange, templates, loading, error,
                 </div>
                 <div className="flex items-center gap-0.5 px-1.5 pb-1">
                   <Button variant="ghost" size="xs" className="h-6 flex-1 justify-start px-1.5 text-[11px] text-(--app-accent)" data-testid={`edit-template-${t.id}`} onClick={() => onOpen(t.id)}><FolderOpen /> Open</Button>
+                  <Button variant="ghost" size="icon-xs" title={t.pinned ? "Unpin" : "Pin to top"} data-testid={`pin-template-${t.id}`} onClick={() => onTogglePin(t.id, !t.pinned)}
+                    className={t.pinned ? "text-[#E09A00]" : undefined}>{t.pinned ? <PinOff /> : <Pin />}</Button>
                   <Button variant="ghost" size="icon-xs" title="Rename / change brand" data-testid={`rename-template-${t.id}`} onClick={() => setEditing(t.id)}><Pencil /></Button>
                   <Button variant="ghost" size="icon-xs" title="Duplicate" data-testid={`duplicate-template-${t.id}`} onClick={() => onDuplicate(t.id)}><Copy /></Button>
                   <Button variant="ghost" size="icon-xs" title="Delete" data-testid={`delete-template-${t.id}`} onClick={() => onDelete(t)}><Trash2 /></Button>

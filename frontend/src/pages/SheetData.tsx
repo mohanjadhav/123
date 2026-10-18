@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
+import { useRecordPrint } from "@/lib/history";
+import { BarcodeGenerator } from "@/components/workspace/BarcodeGenerator";
 import { flushSync } from "react-dom";
 import type { KeyboardEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Barcode, CopyPlus, Eye, ListOrdered, ListPlus, FileSpreadsheet, Info, Plus, Printer, RefreshCw, RotateCcw, Search, Tag, Trash2 } from "lucide-react";
+import { ArrowLeft, Barcode, CopyPlus, Wand2, Eye, ListOrdered, ListPlus, FileSpreadsheet, Info, Plus, Printer, RefreshCw, RotateCcw, Search, Tag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ThemePicker } from "@/components/ThemePicker";
 import { ColumnHeader } from "@/components/workspace/ColumnHeader";
@@ -75,12 +77,20 @@ export default function SheetData() {
     if (!items.length) return toast.error("Tick rows with a quantity first");
     addToQueue.mutate({ template_id: tpl.id, source_id: sourceId || null, items });
   };
+  const recordPrint = useRecordPrint();
+  const [genOpen, setGenOpen] = useState(false);
+  const applyBarcodes = (col: string, isNew: boolean, values: Record<string, string>) => update((c) => ({
+    ...c,
+    columns: isNew ? [...c.columns, col] : c.columns,
+    rows: c.rows.map((r) => (values[r.id] ? { ...r, cells: { ...r.cells, [col]: values[r.id] } } : isNew ? { ...r, cells: { ...r.cells, [col]: "" } } : r)),
+  }));
   const runPrint = () => {
     if (!tpl) return toast.error("Create a label in the designer first");
     if (!printRows.length) return toast.error("Tick at least one row to print");
     flushSync(() => setPrintJob(printRows));
     window.print();
     setPrintJob(null);
+    recordPrint("sheet", [{ template_id: tpl.id, template_name: tpl.name, source_id: source?.id ?? null, source_name: source?.name ?? "", labels: printRows.length }]);
   };
 
   const setRows = (fn: (rows: CopyRow[]) => CopyRow[]) => update((c) => ({ ...c, rows: fn(c.rows) }));
@@ -152,6 +162,8 @@ export default function SheetData() {
       <SheetTabs sources={sources} active={source} onSelect={(s) => { setEditing(null); setQ(""); nav(`/data/${s.id}`); }} testId="data-sheet-tabs" />
 
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#D9DDE3] bg-[#F8F9FB] px-3 py-2">
+        <Button size="sm" variant="outline" className="bg-white text-(--app-accent)" data-testid="generate-barcodes-button" disabled={!copy} onClick={() => setGenOpen(true)}
+          title="Fill empty cells with new serial or EAN-13 barcode numbers"><Wand2 /> Generate barcodes</Button>
         <Button size="sm" data-testid="add-row-button" disabled={!copy} onClick={addRow} className="bg-(--app-accent) text-white hover:bg-(--app-accent-hover)"><Plus /> Add row</Button>
         <Button size="sm" variant="outline" className="bg-white" data-testid="refresh-from-google-button" disabled={!canRefresh || refresh.isPending}
           title={canRefresh ? "Get the latest rows from Google Sheets" : "Only Google Sheet links can refresh"}
@@ -264,6 +276,7 @@ export default function SheetData() {
       {tpl && printJob && <PrintPortal template={tpl} ps={tpl.page_setup} rows={printJob} mapping={mapping} />}
       <RefreshDialog open={refreshOpen} onOpenChange={setRefreshOpen} pending={refresh.isPending}
         onChoose={(mode) => refresh.mutate(mode, { onSuccess: () => setRefreshOpen(false) })} />
+      <BarcodeGenerator open={genOpen} onOpenChange={setGenOpen} columns={columns} rows={rows} onApply={applyBarcodes} />
     </div>
   );
 }

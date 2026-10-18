@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useHistorySummary, useRecordPrint } from "@/lib/history";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -227,12 +228,15 @@ export default function Workspace() {
   const printRows = expandRows(copyRows, qtyColumn);
   const previewRow = copyRows.find((r) => r.selected && rowQty(r, qtyColumn) > 0)?.cells ?? rows[0] ?? null;
 
+  const recordPrint = useRecordPrint();
+  const history = useHistorySummary();
   const runPrint = (list: Row[], single = false) => {
     if (!tpl) return;
     if (!list.length) return toast.error(rows.length ? "Tick at least one row to print" : "Import data first");
     flushSync(() => setPrintJob({ rows: list, single }));
     window.print();
     setPrintJob(null);
+    recordPrint("designer", [{ template_id: tpl.id, template_name: tpl.name, source_id: source?.id ?? null, source_name: source?.name ?? "", labels: list.length }]);
   };
 
   // ---- editing helpers
@@ -335,6 +339,10 @@ export default function Workspace() {
         <ToolButton testId="new-template-button" icon={<FilePlus2 />} label="New label" primary onClick={() => setDialog("new")} />
         <ToolButton testId="copy-label-button" icon={<Copy />} label="Create a copy" onClick={() => tpl && duplicate.mutate(tpl.id)} disabled={!tpl} />
         <span className="ml-auto pr-2 text-xs text-[#6B7280]" data-testid="save-status">{tpl ? (draft?.dirty ? "● Unsaved changes" : "Saved") : ""}</span>
+        <button data-testid="today-printed-badge" onClick={() => nav("/history")} title="Labels printed today — open Print history"
+          className="mr-1 flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-[#E6F4EA] px-2.5 text-xs text-[#137333] transition-colors duration-150 hover:bg-[#CEEAD6] [&_svg]:size-3.5">
+          <Printer /> Today: <b className="font-mono">{(history.data?.today_labels ?? 0).toLocaleString()}</b>
+        </button>
         <ToolButton testId="settings-button" icon={<Cog />} label="Settings & backup" onClick={() => setSettingsOpen(true)} />
         <ThemePicker />
       </header>

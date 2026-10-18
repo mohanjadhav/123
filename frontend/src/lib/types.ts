@@ -201,3 +201,46 @@ export interface UpdateCheck {
   notes: string;
   error: string | null;
 }
+
+// backend/models/history.py
+export interface PrintPart {
+  template_id: string;
+  template_name: string;
+  source_id: string | null;
+  source_name: string;
+  labels: number;
+}
+export interface PrintLogCreate {
+  origin: "designer" | "sheet" | "queue";
+  parts: PrintPart[];
+  tz: string;
+}
+export interface PrintLog {
+  id: string;
+  created_at: string;
+  day: string;
+  origin: string;
+  labels: number;
+  parts: PrintPart[];
+}
+export interface DayCount { day: string; labels: number }
+export interface NameCount { name: string; labels: number; prints: number }
+export interface HistorySummary {
+  today: string;
+  today_labels: number;
+  week_labels: number;
+  total_labels: number;
+  by_day: DayCount[];
+  by_sheet: NameCount[];
+  by_label: NameCount[];
+  recent: PrintLog[];
+}
+export interface BarcodeReserve {
+  kind: "serial" | "ean13";
+  prefix: string;
+  count: number;
+  digits: number;
+  start: number | null;
+}
+export interface BarcodeCounter { key: string; kind: string; prefix: string; next: number }
+export interface BarcodeBatch { values: string[]; next: number }

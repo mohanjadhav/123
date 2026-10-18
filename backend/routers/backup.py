@@ -21,6 +21,8 @@ COLLECTIONS = {
     "sheet_uploads": "id",
     "print_queue": "id",
     "images": "id",
+    "print_history": "id",
+    "barcode_counters": "key",
 }
 FORMAT = "rapid-labels-backup"
 

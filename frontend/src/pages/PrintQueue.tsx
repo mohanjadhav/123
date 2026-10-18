@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
+import { useRecordPrint } from "@/lib/history";
 import { flushSync } from "react-dom";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -63,11 +64,13 @@ export default function PrintQueue() {
   const setItems = (j: QueueJob, items: QueueItem[]) => patch.mutate({ id: j.id, body: { items } });
   const toggleAll = () => jobs.forEach((j) => j.selected === allOn && patch.mutate({ id: j.id, body: { selected: !allOn } }));
 
+  const recordPrint = useRecordPrint();
   const runPrint = () => {
     if (!parts.length) return toast.error("Tick at least one job with labels to print");
     flushSync(() => setPrinting(parts));
     window.print();
     setPrinting(null);
+    recordPrint("queue", printable.map((j) => ({ template_id: j.template_id, template_name: j.template_name, source_id: j.source_id ?? null, source_name: j.source_name, labels: jobLabels(j) })));
     const ids = printable.map((j) => j.id);
     if (confirm(`Printed ${totalLabels} labels. Remove the ${ids.length} printed job${ids.length === 1 ? "" : "s"} from the queue?`)) {
       remove.mutate(ids);

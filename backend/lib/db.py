@@ -28,6 +28,8 @@ INDEXES: dict[str, list[IndexModel]] = {
     "sheet_uploads": [IndexModel([("id", ASCENDING)], name="id", unique=True)],
     "images": [IndexModel([("id", ASCENDING)], name="id", unique=True)],
     "settings": [IndexModel([("id", ASCENDING)], name="id", unique=True)],
+    "print_history": [IndexModel([("id", ASCENDING)], name="id", unique=True), IndexModel([("created_at", DESCENDING)], name="created_desc"), IndexModel([("day", ASCENDING)], name="day")],
+    "barcode_counters": [IndexModel([("key", ASCENDING)], name="key", unique=True)],
     "sheet_sources": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),
         IndexModel([("created_at", DESCENDING)], name="created_desc"),

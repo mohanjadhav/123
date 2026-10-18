@@ -15,7 +15,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiErrorDetail } from "@/lib/api";
-import { expandRows, rowQty, tickByQty, useColumnWidths, withManualQty, withTick } from "@/lib/grid";
+import { expandRows, rowQty, tickByQty, useColumnWidths, withQty, withTick } from "@/lib/grid";
+import { QtyStepper } from "@/components/workspace/QtyStepper";
 import { QtyColumnSelect } from "@/components/workspace/QtyColumnSelect";
 import { autoMapping, fetchSources, fetchTemplates, placeholdersOf } from "@/lib/label";
 import type { CopyRow, Row } from "@/lib/types";
@@ -194,11 +195,11 @@ export default function SheetData() {
         ) : query.isError ? (
           <p className="p-6 text-sm text-[#D93025]" data-testid="sheet-data-error">{apiErrorDetail(query.error, "Could not load this sheet")}</p>
         ) : (
-          <table className="table-fixed border-collapse text-xs" style={{ width: 44 + 40 + 64 + 72 + columns.reduce((n, c) => n + widthOf(c), 0), minWidth: "100%" }} data-testid="sheet-data-table">
+          <table className="table-fixed border-collapse text-xs" style={{ width: 44 + 40 + 92 + 72 + columns.reduce((n, c) => n + widthOf(c), 0), minWidth: "100%" }} data-testid="sheet-data-table">
             <colgroup>
               <col style={{ width: 44 }} />
               <col style={{ width: 40 }} />
-              <col style={{ width: 64 }} />
+              <col style={{ width: 92 }} />
               {columns.map((c) => <col key={c} style={{ width: widthOf(c) }} />)}
               <col style={{ width: 72 }} />
             </colgroup>
@@ -226,15 +227,8 @@ export default function SheetData() {
                       <Checkbox data-testid={`data-row-checkbox-${i}`} checked={r.selected} onCheckedChange={() => setRows((rs) => rs.map((x) => (x.id === r.id ? withTick(x, !r.selected, qtyColumn) : x)))} />
                     </td>
                     <td className="border-b border-r border-[#EEF0F2] px-1 py-0.5">
-                      {qtyColumn ? (
-                        <span data-testid={`data-row-qty-auto-${i}`} title={`From "${qtyColumn}" — edit that cell to change`} className="block px-1.5 font-mono text-xs font-semibold text-(--app-accent)">
-                          {rowQty(r, qtyColumn) || "—"}
-                        </span>
-                      ) : (
-                        <input type="number" min={0} data-testid={`data-row-qty-${i}`} value={r.qty || ""} placeholder="0"
-                          onChange={(e) => setRows((rs) => rs.map((x) => (x.id === r.id ? withManualQty(x, Math.max(0, Math.min(9999, parseInt(e.target.value) || 0))) : x)))}
-                          className="h-6 w-full rounded border border-transparent bg-transparent px-1.5 font-mono text-xs outline-none focus:border-(--app-accent) focus:bg-white" />
-                      )}
+                      <QtyStepper value={rowQty(r, qtyColumn)} auto={!!qtyColumn} testId={`data-row-qty-${i}`}
+                        onChange={(n) => setRows((rs) => rs.map((x) => (x.id === r.id ? withQty(x, n, qtyColumn) : x)))} />
                     </td>
                     {columns.map((c) => {
                       const isEditing = editing?.id === r.id && editing.col === c;

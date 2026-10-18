@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QtyColumnSelect } from "@/components/workspace/QtyColumnSelect";
+import { QtyStepper } from "@/components/workspace/QtyStepper";
 import { rowQty, useColumnWidths } from "@/lib/grid";
 import type { CopyRow, Row, SheetSource } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -120,11 +121,11 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
               </div>
             </div>
           ) : (
-            <table className="table-fixed border-collapse text-xs" style={{ width: 40 + 40 + 64 + 40 + columns.reduce((n, c) => n + widthOf(c), 0), minWidth: "100%" }} data-testid="sheets-data-table">
+            <table className="table-fixed border-collapse text-xs" style={{ width: 40 + 40 + 92 + 40 + columns.reduce((n, c) => n + widthOf(c), 0), minWidth: "100%" }} data-testid="sheets-data-table">
               <colgroup>
                 <col style={{ width: 40 }} />
                 <col style={{ width: 40 }} />
-                <col style={{ width: 64 }} />
+                <col style={{ width: 92 }} />
                 {columns.map((c) => <col key={c} style={{ width: widthOf(c) }} />)}
                 <col style={{ width: 40 }} />
               </colgroup>
@@ -149,15 +150,7 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
                       <Checkbox data-testid={`row-checkbox-${i}`} checked={r.selected} onCheckedChange={() => onToggle([r.id], !r.selected)} />
                     </td>
                     <td className="border-b border-r border-[#EEF0F2] px-1 py-0.5">
-                      {qtyColumn ? (
-                        <span data-testid={`row-qty-auto-${i}`} title={`From "${qtyColumn}"`} className="block px-1.5 font-mono text-xs font-semibold text-(--app-accent)">
-                          {rowQty(r, qtyColumn) || "—"}
-                        </span>
-                      ) : (
-                        <input type="number" min={0} data-testid={`row-qty-input-${i}`} value={r.qty || ""} placeholder="0"
-                          onChange={(e) => onQty(r.id, Math.max(0, Math.min(9999, parseInt(e.target.value) || 0)))}
-                          className="h-6 w-full rounded border border-transparent bg-transparent px-1.5 font-mono text-xs outline-none focus:border-(--app-accent) focus:bg-white" />
-                      )}
+                      <QtyStepper value={rowQty(r, qtyColumn)} auto={!!qtyColumn} testId={`row-qty-${i}`} onChange={(n) => onQty(r.id, n)} />
                     </td>
                     {columns.map((c) => <td key={c} title={r.cells[c]} className="truncate border-b border-r border-[#EEF0F2] px-2 py-1">{r.cells[c]}</td>)}
                     <td className="border-b border-[#EEF0F2] px-1 text-center">

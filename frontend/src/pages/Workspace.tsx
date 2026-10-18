@@ -17,7 +17,7 @@ import { PrintPortal, PrintPreviewDialog } from "@/components/workspace/PrintPre
 import { RefreshDialog } from "@/components/workspace/RefreshDialog";
 import { useSheetCopy } from "@/lib/useSheetCopy";
 import { queueItemsFrom, useAddToQueue, useQueueCount } from "@/lib/queue";
-import { expandRows, rowQty, tickByQty, withManualQty, withTick } from "@/lib/grid";
+import { expandRows, rowQty, tickByQty, withQty, withTick } from "@/lib/grid";
 import { PageSetupDialog } from "@/components/workspace/PageSetupDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiDelete, apiErrorDetail, apiPost, apiPut } from "@/lib/api";
@@ -331,7 +331,7 @@ export default function Workspace() {
             onOpenImport={() => setDialog("import")}
             onToggle={(ids, on) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (ids.includes(r.id) ? withTick(r, on, c.qty_column) : r)) }))}
             qtyColumn={qtyColumn} onQtyColumn={(col) => updateCopy((c) => ({ ...c, qty_column: col, rows: tickByQty(c.rows, col) }))}
-            onQty={(id, qty) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (r.id === id ? withManualQty(r, qty) : r)) }))}
+            onQty={(id, qty) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (r.id === id ? withQty(r, qty, c.qty_column) : r)) }))}
             onEditData={() => { if (draft?.dirty) save.mutate(); }}
             onPrintRow={(r) => runPrint([r], true)} onPreview={() => setDialog("preview")} onPrint={() => runPrint(printRows)} onQueue={queueTicked}
             collapsed={gridCollapsed} onCollapse={() => setGridCollapsed((c) => !c)} />

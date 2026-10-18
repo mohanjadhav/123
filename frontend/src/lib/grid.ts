@@ -77,7 +77,14 @@ export const tickByQty = (rows: CopyRow[], qtyColumn: string | null): CopyRow[] 
   rows.map((r) => ({ ...r, selected: rowQty(r, qtyColumn) > 0 }));
 /** Manual quantity typed: > 0 ticks, 0 unticks. */
 export const withManualQty = (r: CopyRow, qty: number): CopyRow => ({ ...r, qty, selected: qty > 0 });
-/** Tick/untick by hand; ticking a manual row with qty 0 makes it 1 so it prints. */
-export const withTick = (r: CopyRow, on: boolean, qtyColumn: string | null): CopyRow => ({
-  ...r, selected: on, qty: on && !qtyColumn && r.qty < 1 ? 1 : r.qty,
-});
+/** Tick/untick by hand; ticking a row with qty 0 makes it 1 (manual or quantity column) so it prints. */
+export const withTick = (r: CopyRow, on: boolean, qtyColumn: string | null): CopyRow =>
+  on && rowQty(r, qtyColumn) < 1 ? withQty(r, 1, qtyColumn) : { ...r, selected: on };
+
+/** Set a row's print quantity by hand. With a quantity column, the number is written into that column's cell
+ *  (in the app's copy only — the Google Sheet is untouched); otherwise into the manual qty. Re-ticks the row. */
+export function withQty(r: CopyRow, qty: number, qtyColumn: string | null): CopyRow {
+  const n = Math.max(0, Math.min(9999, Math.floor(qty) || 0));
+  if (!qtyColumn) return withManualQty(r, n);
+  return { ...r, cells: { ...r.cells, [qtyColumn]: String(n) }, selected: n > 0 };
+}

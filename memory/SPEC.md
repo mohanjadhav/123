@@ -86,3 +86,7 @@ No auth.
 - Designer print-data grid also has "Generate barcodes" (grid-generate-barcodes-button) → same BarcodeGenerator on the shared sheet copy.
 - Duplicate highlighting: `duplicateCells(rows, barcodeColumns(...))` → red cells (data-duplicate attr, tooltip) in designer DataGrid (`dupCells` prop) and Sheet Data, plus "⚠ N duplicate barcodes" chip (duplicate-count-chip). Updates live while editing.
 - Print Queue: `findQueueDuplicates()` compares ticked items across all ticked jobs (each job's own template barcode columns/mapping); same guard dialog lists "Sheet (label) · row N".
+
+## Free web hosting on Render (no password, by user choice)
+- `render.yaml` (Blueprint, plan free, docker, dockerfilePath ./render/Dockerfile, context repo root, env MONGO_URL sync:false → user pastes MongoDB Atlas M0 link, DB_NAME rapid_labels, healthCheck /api/templates).
+- `render/Dockerfile`: node:22 builds frontend → python:3.11-slim installs backend reqs (minus emergentintegrations) → CMD seed.py + import_seed_data.py + `uvicorn serve_web:app --port $PORT`. `backend/serve_web.py` mounts the React build (FRONTEND_DIST) at "/" after /api with SPA fallback. Dockerfile kept out of repo root so Emergent's deploy isn't affected. Guide: `RUN_ON_RENDER.md`.

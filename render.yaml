@@ -1,0 +1,17 @@
+# Render Blueprint — New + > Blueprint > pick this repository. Free plan.
+services:
+  - type: web
+    name: rapid-labels
+    runtime: docker
+    plan: free
+    dockerfilePath: ./render/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/templates
+    autoDeploy: true
+    envVars:
+      - key: MONGO_URL
+        sync: false # Render asks you to paste your MongoDB Atlas connection link
+      - key: DB_NAME
+        value: rapid_labels
+      - key: CORS_ORIGINS
+        value: "*"

@@ -1,0 +1,14 @@
+**/node_modules
+**/__pycache__
+**/.venv
+frontend/dist
+desktop/build
+desktop/Output
+dist
+.git
+.emergent
+test_reports
+memory
+backend/.env
+backend/tests
+*.log

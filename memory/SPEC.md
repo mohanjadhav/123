@@ -103,3 +103,4 @@ No auth.
 - PyInstaller: optimize=1, excludes tests/unused libs (scipy, PIL, numpy/pandas tests, sqlalchemy, pyarrow, IPython…), Windows version resource from `desktop/version_info.template.txt` (filled by the workflow → desktop/build/version_info.txt; skipped if absent).
 - Workflow: optional signtool signing when secrets WINDOWS_CERT_PFX/WINDOWS_CERT_PASSWORD exist (job env HAS_CERT), SHA-256 checksum file published with the release, `actions/attest-build-provenance` (continue-on-error: private repos on free plans can't attest).
 - Frontend: SheetData / PrintQueue / History are lazy-loaded routes (React.lazy + Suspense) so the designer bundle is smaller.
+- Pinned labels: `pinned: bool` on Template (Pydantic + TS); `PATCH /api/templates/{id}/pin` {pinned} sets it WITHOUT touching updated_at (404 if missing). Open label grid (4 per row) shows pinned first (yellow pin badge), then most recently edited; pin/unpin button `pin-template-<id>`.

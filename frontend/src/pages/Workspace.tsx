@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useHistorySummary, useRecordPrint } from "@/lib/history";
+import { barcodeColumns, findDuplicates, useDuplicateGuard } from "@/components/workspace/DuplicateGuard";
+import { BarcodeGenerator } from "@/components/workspace/BarcodeGenerator";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -230,9 +232,16 @@ export default function Workspace() {
 
   const recordPrint = useRecordPrint();
   const history = useHistorySummary();
+  const dupGuard = useDuplicateGuard();
+  const [genOpen, setGenOpen] = useState(false);
   const runPrint = (list: Row[], single = false) => {
     if (!tpl) return;
     if (!list.length) return toast.error(rows.length ? "Tick at least one row to print" : "Import data first");
+    const dups = findDuplicates(copyRows, barcodeColumns(tpl.elements, mapping, columns), single ? (r) => r.cells === list[0] : (r) => r.selected);
+    dupGuard.guard(dups, () => printNow(list, single));
+  };
+  const printNow = (list: Row[], single: boolean) => {
+    if (!tpl) return;
     flushSync(() => setPrintJob({ rows: list, single }));
     window.print();
     setPrintJob(null);
@@ -392,7 +401,7 @@ export default function Workspace() {
             qtyColumn={qtyColumn} onQtyColumn={(col) => updateCopy((c) => ({ ...c, qty_column: col, rows: tickByQty(c.rows, col) }))}
             onQty={(id, qty) => updateCopy((c) => ({ ...c, rows: c.rows.map((r) => (r.id === id ? withQty(r, qty, c.qty_column) : r)) }))}
             onEditData={() => { if (draft?.dirty) save.mutate(); }}
-            onPrintRow={(r) => runPrint([r], true)} onPreview={() => setDialog("preview")} onPrint={() => runPrint(printRows)} onQueue={queueTicked}
+            onPrintRow={(r) => runPrint([r], true)} onPreview={() => setDialog("preview")} onPrint={() => runPrint(printRows)} onQueue={queueTicked} onGenerate={() => setGenOpen(true)}
             collapsed={gridCollapsed} onCollapse={() => setGridCollapsed((c) => !c)} />
         </div>
       ) : (
@@ -408,6 +417,13 @@ export default function Workspace() {
         </div>
       )}
 
+      {dupGuard.dialog}
+      <BarcodeGenerator open={genOpen} onOpenChange={setGenOpen} columns={columns} rows={copyRows}
+        onApply={(col, isNew, values) => updateCopy((c) => ({
+          ...c,
+          columns: isNew ? [...c.columns, col] : c.columns,
+          rows: c.rows.map((r) => (values[r.id] ? { ...r, cells: { ...r.cells, [col]: values[r.id] } } : isNew ? { ...r, cells: { ...r.cells, [col]: "" } } : r)),
+        }))} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <ImageLibrary open={library !== null} onOpenChange={(o) => !o && setLibrary(null)} onPick={pickImage}
         title={library === "background" ? "Choose a background picture" : library === "logo" ? "Choose your logo" : "Choose an image"} />

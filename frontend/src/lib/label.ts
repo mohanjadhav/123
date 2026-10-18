@@ -27,7 +27,7 @@ export const DEFAULT_PAGE_SETUP: PageSetup = {
   margin_top: 0, margin_right: 0, margin_bottom: 0, margin_left: 0, offset_x: 0, offset_y: 0, order: "across", start_position: 1, dpi: 0,
 };
 
-const PLACEHOLDER = /\{\{\s*([^}]+?)\s*\}\}/g;
+export const PLACEHOLDER = /\{\{\s*([^}]+?)\s*\}\}/g;
 
 export function placeholdersOf(tpl: TemplateBase): string[] {
   const set = new Set<string>();

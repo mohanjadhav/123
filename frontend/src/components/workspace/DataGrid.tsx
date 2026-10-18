@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronUp, Eye, FileSpreadsheet, Import, ListPlus, PencilLine, Printer, RefreshCw, Search, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, Wand2, FileSpreadsheet, Import, ListPlus, PencilLine, Printer, RefreshCw, Search, Trash2 } from "lucide-react";
 import { ColumnHeader } from "@/components/workspace/ColumnHeader";
 import { SheetTabs } from "@/components/workspace/SheetTabs";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 const NONE = "__none__";
 
 export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSource, columns, rows, edited, loading, error, canRefresh, refreshing, onRefresh, onOpenImport,
-  onToggle, onQty, qtyColumn, onQtyColumn, onPrintRow, onPreview, onPrint, onQueue, collapsed, onCollapse, onEditData }: {
+  onToggle, onQty, qtyColumn, onQtyColumn, onPrintRow, onPreview, onPrint, onQueue, onGenerate, collapsed, onCollapse, onEditData }: {
   sources: SheetSource[];
   activeSourceId: string | null;
   onChooseSource: (id: string | null) => void;
@@ -37,6 +37,7 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
   onPrintRow: (r: Row) => void;
   onPreview: () => void;
   onPrint: () => void;
+  onGenerate: () => void;
   onQueue: () => void;
   collapsed: boolean;
   onCollapse: () => void;
@@ -94,6 +95,10 @@ export function DataGrid({ sources, activeSourceId, onChooseSource, onDeleteSour
           </div>
         )}
         <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2" data-testid="print-data-actions">
+          {columns.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 bg-white text-(--app-accent)" data-testid="grid-generate-barcodes-button" onClick={onGenerate}
+              title="Fill empty cells with new serial or EAN-13 barcode numbers"><Wand2 /> <span className="hidden xl:inline">Generate barcodes</span><span className="xl:hidden">Barcodes</span></Button>
+          )}
           {columns.length > 0 && <QtyColumnSelect columns={columns} value={qtyColumn} onChange={onQtyColumn} testId="grid-qty-column-select" />}
           <span className="whitespace-nowrap text-xs text-[#4B5563]" data-testid="print-batch-status">
             {rows.length ? <><b>{total}</b> label{total === 1 ? "" : "s"} · {ticked}/{rows.length} rows</> : null}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useRecordPrint } from "@/lib/history";
 import { BarcodeGenerator } from "@/components/workspace/BarcodeGenerator";
+import { barcodeColumns, findDuplicates, useDuplicateGuard } from "@/components/workspace/DuplicateGuard";
 import { flushSync } from "react-dom";
 import type { KeyboardEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -84,9 +85,14 @@ export default function SheetData() {
     columns: isNew ? [...c.columns, col] : c.columns,
     rows: c.rows.map((r) => (values[r.id] ? { ...r, cells: { ...r.cells, [col]: values[r.id] } } : isNew ? { ...r, cells: { ...r.cells, [col]: "" } } : r)),
   }));
+  const dupGuard = useDuplicateGuard();
   const runPrint = () => {
     if (!tpl) return toast.error("Create a label in the designer first");
     if (!printRows.length) return toast.error("Tick at least one row to print");
+    dupGuard.guard(findDuplicates(rows, barcodeColumns(tpl.elements, mapping, columns), (r) => r.selected), printNow);
+  };
+  const printNow = () => {
+    if (!tpl) return;
     flushSync(() => setPrintJob(printRows));
     window.print();
     setPrintJob(null);
@@ -276,6 +282,7 @@ export default function SheetData() {
       {tpl && printJob && <PrintPortal template={tpl} ps={tpl.page_setup} rows={printJob} mapping={mapping} />}
       <RefreshDialog open={refreshOpen} onOpenChange={setRefreshOpen} pending={refresh.isPending}
         onChoose={(mode) => refresh.mutate(mode, { onSuccess: () => setRefreshOpen(false) })} />
+      {dupGuard.dialog}
       <BarcodeGenerator open={genOpen} onOpenChange={setGenOpen} columns={columns} rows={rows} onApply={applyBarcodes} />
     </div>
   );

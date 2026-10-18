@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, FolderOpen, Search, Trash2 } from "lucide-react";
+import { Check, Copy, FolderOpen, Pencil, Search, Trash2, X } from "lucide-react";
 import { Label as LabelView, Scaled } from "@/components/label/Label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -99,8 +99,36 @@ export function NewLabelDialog({ open, onOpenChange, brands, onCreate, pending }
   );
 }
 
-export function OpenLabelDialog({ open, onOpenChange, templates, loading, error, onRetry, onOpen, onDuplicate, onDelete, onCreate, creating, currentId }: {
+/** Inline name + brand editor on an Open label card. */
+function RenameForm({ t, brands, onRename, onDone }: { t: Template; brands: string[]; onRename: (id: string, name: string, brand: string) => Promise<unknown>; onDone: () => void }) {
+  const [name, setName] = useState(t.name);
+  const [brand, setBrand] = useState(t.brand);
+  const [busy, setBusy] = useState(false);
+  const ok = name.trim().length > 0 && name.trim().length <= 120;
+  const submit = async () => {
+    if (!ok || busy) return;
+    if (name.trim() === t.name && (brand.trim() || "General") === t.brand) return onDone();
+    setBusy(true);
+    try { await onRename(t.id, name.trim(), brand.trim() || "General"); onDone(); } catch { /* toast already shown */ } finally { setBusy(false); }
+  };
+  const key = (e: React.KeyboardEvent) => { if (e.key === "Enter") submit(); if (e.key === "Escape") { e.stopPropagation(); onDone(); } };
+  return (
+    <div className="grid gap-1 px-2 py-1.5" data-testid={`rename-form-${t.id}`}>
+      <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={key} placeholder="Label name" className="h-7 px-2 text-xs" data-testid={`rename-name-input-${t.id}`} />
+      <Input value={brand} onChange={(e) => setBrand(e.target.value)} onKeyDown={key} placeholder="Brand" list="label-brand-options" className="h-7 px-2 text-xs" data-testid={`rename-brand-input-${t.id}`} />
+      <datalist id="label-brand-options">{brands.map((b) => <option key={b} value={b} />)}</datalist>
+      <div className="flex gap-1">
+        <Button size="xs" className="h-6 flex-1 bg-(--app-accent) text-[11px] text-white hover:bg-(--app-accent-hover)" disabled={!ok || busy} onClick={submit} data-testid={`rename-save-${t.id}`}><Check /> {busy ? "Saving…" : "Save"}</Button>
+        <Button size="icon-xs" variant="ghost" title="Cancel" onClick={onDone} data-testid={`rename-cancel-${t.id}`}><X /></Button>
+      </div>
+    </div>
+  );
+}
+
+export function OpenLabelDialog({ open, onOpenChange, templates, loading, error, onRetry, onOpen, onDuplicate, onDelete, onCreate, creating, currentId, brands, onRename }: {
   open: boolean;
+  brands: string[];
+  onRename: (id: string, name: string, brand: string) => Promise<unknown>;
   onCreate: (t: TemplateBase) => void;
   creating: boolean;
   currentId: string;
@@ -115,6 +143,7 @@ export function OpenLabelDialog({ open, onOpenChange, templates, loading, error,
 }) {
   const [q, setQ] = useState("");
   // all labels in one grid, most recently edited first (the list from the server is already sorted)
+  const [editing, setEditing] = useState<string | null>(null);
   const shown = useMemo(() => templates.filter((t) => !q || `${t.name} ${t.brand}`.toLowerCase().includes(q.toLowerCase())), [templates, q]);
 
   return (
@@ -161,15 +190,18 @@ export function OpenLabelDialog({ open, onOpenChange, templates, loading, error,
                   </Scaled>
                   {t.id === currentId && <span className="absolute left-1.5 top-1.5 rounded bg-(--app-accent) px-1.5 py-0.5 text-[9px] font-semibold text-white">IN USE</span>}
                 </button>
+                {editing === t.id ? <RenameForm t={t} brands={brands} onRename={onRename} onDone={() => setEditing(null)} /> : (<>
                 <div className="px-2.5 pt-1.5">
-                  <p className="truncate text-[13px] font-medium text-[#1F2937]" title={t.name} data-testid={`template-name-${t.id}`}>{t.name}</p>
-                  <p className="truncate text-[10px] text-[#6B7280]" title={t.brand}>{t.brand} · {t.width_mm}×{t.height_mm} mm</p>
+                  <p className="truncate text-[13px] font-medium text-[#1F2937]" title={`${t.name} — double-click to rename`} data-testid={`template-name-${t.id}`} onDoubleClick={() => setEditing(t.id)}>{t.name}</p>
+                  <p className="truncate text-[10px] text-[#6B7280]" title={t.brand} data-testid={`template-brand-${t.id}`}>{t.brand} · {t.width_mm}×{t.height_mm} mm</p>
                 </div>
                 <div className="flex items-center gap-0.5 px-1.5 pb-1">
                   <Button variant="ghost" size="xs" className="h-6 flex-1 justify-start px-1.5 text-[11px] text-(--app-accent)" data-testid={`edit-template-${t.id}`} onClick={() => onOpen(t.id)}><FolderOpen /> Open</Button>
+                  <Button variant="ghost" size="icon-xs" title="Rename / change brand" data-testid={`rename-template-${t.id}`} onClick={() => setEditing(t.id)}><Pencil /></Button>
                   <Button variant="ghost" size="icon-xs" title="Duplicate" data-testid={`duplicate-template-${t.id}`} onClick={() => onDuplicate(t.id)}><Copy /></Button>
                   <Button variant="ghost" size="icon-xs" title="Delete" data-testid={`delete-template-${t.id}`} onClick={() => onDelete(t)}><Trash2 /></Button>
                 </div>
+                </>)}
               </div>
             ))}
           </div>

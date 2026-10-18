@@ -157,6 +157,20 @@ export default function Workspace() {
   const syncSaved = (saved: Template) => {
     qc.setQueryData<Template[]>(["templates"], (list) => list?.map((t) => (t.id === saved.id ? saved : t)));
   };
+  // rename / re-brand from the Open label cards: saves only name + brand on top of the stored label
+  const rename = useMutation({
+    mutationFn: ({ id, name, brand }: { id: string; name: string; brand: string }) => {
+      const t = templates.find((x) => x.id === id);
+      if (!t) throw new Error("Label not found");
+      return putTemplate(id, { ...toBase(t), name, brand });
+    },
+    onSuccess: (saved) => {
+      syncSaved(saved);
+      setDrafts((d) => (d[saved.id] ? { ...d, [saved.id]: { ...d[saved.id], tpl: { ...d[saved.id].tpl, name: saved.name, brand: saved.brand } } } : d));
+      toast.success(`Renamed to "${saved.name}" · ${saved.brand}`);
+    },
+    onError: (e) => toast.error("Could not rename label", { description: apiErrorDetail(e, "The server did not answer — try again.") }),
+  });
   const save = useMutation({
     mutationFn: () => {
       if (!tpl) throw new Error("no label");
@@ -440,7 +454,8 @@ export default function Workspace() {
       <NewLabelDialog open={dialog === "new"} onOpenChange={(o) => setDialog(o ? "new" : null)} brands={brands} pending={create.isPending} onCreate={createLinked} />
       <OpenLabelDialog open={dialog === "open"} onOpenChange={(o) => { setDialog(o ? "open" : null); if (o) templatesQ.refetch(); }} templates={templates}
         loading={templatesQ.isFetching && !templates.length} error={templatesQ.isError ? apiErrorDetail(templatesQ.error, "Could not load labels") : null} onRetry={() => templatesQ.refetch()} onOpen={openTab}
-        onCreate={createLinked} creating={create.isPending} currentId={currentId}
+        onCreate={createLinked} creating={create.isPending} currentId={currentId} brands={brands}
+        onRename={(id, name, brand) => rename.mutateAsync({ id, name, brand })}
         onDuplicate={(id) => duplicate.mutate(id)} onDelete={(t) => confirm(`Delete "${t.name}"?`) && remove.mutate(t.id)} />
       <Dialog open={dialog === "import"} onOpenChange={(o) => setDialog(o ? "import" : null)}>
         <DialogContent data-testid="import-dialog">

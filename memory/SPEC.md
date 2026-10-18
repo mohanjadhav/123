@@ -61,3 +61,7 @@ No auth.
 - Template: `background_image` (library URL, link or {{column}}), `background_fit`, `background_opacity`.
 - Image library: `/api/images` (POST multipart `files`, GET list, GET `/{id}/file` raw bytes at original resolution, DELETE). Mongo collection `images` (bytes in `data`). Max 10 MB, image/* only. UI: `components/workspace/ImageLibrary.tsx`; left palette tools Image / Logo / Background open it; Inspector "Change image" and "Background picture" too.
 - Page setup `dpi` (0 | 203 | 300 | 600): barcode bar modules snapped to whole printer dots (`Codes.tsx` snapWidth).
+
+## Run on GitHub (Codespaces)
+- `.devcontainer/` (python 3.11 + node 22 + mongo:7 via compose, app shares db network → localhost:27017). `setup.sh` (postCreate): installs deps (skips emergentintegrations), writes backend/.env, runs seed.py + import_seed_data.py. `start.sh` (postStart): uvicorn :8001 + vite :3000. User guide: `RUN_ON_GITHUB.md`.
+- `backend/seed_data/labels.json` = export of templates (+ referenced library images); `import_seed_data.py` inserts missing by id (idempotent). Re-export if labels change before pushing.

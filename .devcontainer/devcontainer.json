@@ -1,0 +1,20 @@
+{
+  "name": "RAPID LABELS by MOHAN",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "bash start.sh",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "RAPID LABELS (open this)", "onAutoForward": "openBrowser" },
+    "8001": { "label": "API server", "onAutoForward": "silent" },
+    "27017": { "label": "Database", "onAutoForward": "silent" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["RUN_ON_GITHUB.md"] }
+  }
+}

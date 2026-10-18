@@ -1,0 +1,77 @@
+{
+  "iteration": 4,
+  "mode": "generate",
+  "summary": "Briefing covers the 'blank label not opening / save+list all labels / could not create label' bug-fix verification. Wrote 6 new browser checks covering all create/open/persist UI criteria + 2 new backend test files (3 tests) covering the damaged-data resilience and validation-error API criteria. All 8 checks passed (0 bugs). Created/deleted only tscheck-/TA-prefixed fixtures; did not touch SAMPLE NMM, Bin & Shelf Tag, Coffee Bag Label, Apparel Hangtag or SAMPLE NMM's print queue job.",
+  "passed": 8,
+  "failed": 0,
+  "flaky": 0,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": false,
+  "bugs": [],
+  "action_items": [
+    {
+      "type": "note",
+      "severity": "low",
+      "detail": "Pre-existing backend tests test_tscheck_sheet_upload_xlsx.py and test_tscheck_sheet_upload_csv.py fail at session start because they depend on /tmp/brands.xlsx and /tmp/one.csv which don't survive across ephemeral /tmp (same issue noted in iteration_3). Unrelated to this iteration's acceptance_matrix (label create/open/save flow) and not touched/fixed here."
+    }
+  ],
+  "checks": [
+    {
+      "criterion": "Create a BLANK label",
+      "name": "create-blank-label",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "New label -> starter-blank -> name 'TA Blank 1' -> Create: POST /api/templates returned 201 (width_mm=60, height_mm=40, elements=[]); label-tab-open-<id> and canvas-editor-container visible; zero 'Could not create label' toasts. Cleaned up via DELETE /api/templates/{id}."
+    },
+    {
+      "criterion": "Create a label without typing a name",
+      "name": "create-label-default-name",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "New label -> starter-blank -> left name input empty -> Create: POST /api/templates returned 201 with a non-empty default name, tab opened, no error toast. Cleaned up via DELETE /api/templates/{id}."
+    },
+    {
+      "criterion": "Create a label from a starter template",
+      "name": "create-label-from-starter",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "New label -> starter-price -> name 'TA Starter Price' -> Create: POST returned 201 with elements.length > 0, tab + canvas rendered the starter elements. Cleaned up via DELETE /api/templates/{id}."
+    },
+    {
+      "criterion": "Created labels are saved (persist across reload, visible in Open label list, reopen shows the added element)",
+      "name": "created-label-persists-after-reload",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Created 'TA Persist 1', clicked add-text-button, save-status showed '● Unsaved changes', clicked save-template-button -> PUT /api/templates/{id} returned 200. page.reload() then open-label-button -> open-label-dialog -> searched 'TA Persist 1' -> template-card-<id> visible -> clicked open-template-<id> -> tab opened; GET /api/templates/{id} confirmed elements contains a type:text element. Cleaned up via DELETE /api/templates/{id}."
+    },
+    {
+      "criterion": "Open label list shows ALL labels (count + search)",
+      "name": "open-label-list-shows-all",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "open-label-count text matched GET /api/templates length (4: SAMPLE NMM, Bin & Shelf Tag, Coffee Bag Label, Apparel Hangtag); all 4 names rendered as template-card-<id>; searching 'Coffee Bag Label' kept that card visible and hid 'Apparel Hangtag' card (0 count). No open-label-error shown."
+    },
+    {
+      "criterion": "Open a label from the list activates its tab",
+      "name": "open-label-from-list-activates-tab",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Clicked open-template-<SAMPLE NMM id> in open-label-dialog; dialog closed, label-tab-<id> and canvas-editor-container became visible (no pre-existing data mutated, read-only open)."
+    },
+    {
+      "criterion": "Damaged data does not break the list (backend)",
+      "name": "test_tscheck_templates_damaged_data_resilience.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Created fixture template via POST /templates (201). Inserted {id:'tscheck-zz-broken', name:'', width_mm:-5} directly via pymongo into the templates collection. GET /api/templates still returned 200 with the fixture template fully intact (backend log confirmed: 'WARNING - skipping invalid template zz-broken: [... string_too_short ... greater_than ... missing height_mm]'). Cleaned up broken doc + fixture template."
+    },
+    {
+      "criterion": "Clear error message on create failure (API 422 + detail list)",
+      "name": "test_tscheck_create_template_validation_error.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/templates {name:'', width_mm:0, height_mm:0} -> 422 with detail list containing field locs ('name'/'width_mm') and non-empty msg text (string_too_short / greater_than). Companion happy-path POST with valid payload -> 201, cleaned up via DELETE."
+    }
+  ]
+}

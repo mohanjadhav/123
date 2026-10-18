@@ -56,6 +56,11 @@ export function apiErrorDetail(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
     const d = (err.body as { detail?: unknown } | null)?.detail;
     if (typeof d === "string") return d;
+    if (Array.isArray(d)) { // FastAPI validation errors: [{loc, msg}]
+      const msgs = d.map((x: { loc?: unknown[]; msg?: string }) => `${(x.loc ?? []).filter((p) => p !== "body").join(" › ")}: ${x.msg ?? ""}`).slice(0, 3);
+      if (msgs.length) return msgs.join("; ");
+    }
+    return `Server error ${err.status}`;
   }
   return fallback;
 }

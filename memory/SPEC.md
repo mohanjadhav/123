@@ -90,3 +90,9 @@ No auth.
 ## Free web hosting on Render (no password, by user choice)
 - `render.yaml` (Blueprint, plan free, docker, dockerfilePath ./render/Dockerfile, context repo root, env MONGO_URL sync:false → user pastes MongoDB Atlas M0 link, DB_NAME rapid_labels, healthCheck /api/templates).
 - `render/Dockerfile`: node:22 builds frontend → python:3.11-slim installs backend reqs (minus emergentintegrations) → CMD seed.py + import_seed_data.py + `uvicorn serve_web:app --port $PORT`. `backend/serve_web.py` mounts the React build (FRONTEND_DIST) at "/" after /api with SPA fallback. Dockerfile kept out of repo root so Emergent's deploy isn't affected. Guide: `RUN_ON_RENDER.md`.
+
+## Open label & reopen last label (latest)
+- Open label dialog (LabelDialogs.tsx OpenLabelDialog): "Start new" row = all STARTERS incl. Blank (one click → `starterToTemplate()` → create), then ONE flat grid of all saved labels (server order = most recently edited first), current one marked IN USE; search by name/brand; loading / error + Retry states; count "N labels saved".
+- New labels (both dialogs) are linked to the sheet currently in use (`createLinked` → source_id = current source).
+- Tabs persistence fix: Workspace waits for `templatesQ.isSuccess` before filtering/persisting `bc.openTabs` / `bc.activeTab` (previously the empty list during loading wiped them). On open: last active label + its linked sheet (template.source_id) reopen; if none survive, the most recently edited label opens.
+- GET /api/templates skips (logs) invalid docs instead of failing the whole list; toasts show the server's error detail (apiErrorDetail handles FastAPI validation lists).

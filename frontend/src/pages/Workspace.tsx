@@ -86,13 +86,20 @@ export default function Workspace() {
   const [dialog, setDialog] = useState<null | "new" | "open" | "import" | "preview" | "refresh" | "pagesetup">(null);
   const [gridCollapsed, setGridCollapsed] = useState(false);
 
-  // Tabs: only templates that still exist; default to the newest template.
+  // Tabs: reopen the labels (and active label) from last time; if none survive, open the most recently edited one.
+  // Wait until labels are loaded — otherwise the remembered tabs would be wiped while the list is still empty.
+  const loaded = templatesQ.isSuccess;
   const tabIds = useMemo(() => {
+    if (!loaded) return openIds;
     const ids = openIds.filter((id) => templates.some((t) => t.id === id));
-    return ids.length || openIds.length || !templates.length ? ids : [templates[0].id]; // fresh start opens newest
-  }, [openIds, templates]);
-  const currentId = tabIds.includes(activeId) ? activeId : (tabIds[0] ?? "");
-  useEffect(() => { localStorage.setItem("bc.openTabs", JSON.stringify(tabIds)); localStorage.setItem("bc.activeTab", JSON.stringify(currentId)); }, [tabIds, currentId]);
+    return ids.length || !templates.length ? ids : [templates[0].id]; // list is sorted newest-edited first
+  }, [openIds, templates, loaded]);
+  const currentId = tabIds.includes(activeId) ? activeId : (tabIds[tabIds.length - 1] ?? "");
+  useEffect(() => {
+    if (!loaded) return;
+    localStorage.setItem("bc.openTabs", JSON.stringify(tabIds));
+    localStorage.setItem("bc.activeTab", JSON.stringify(currentId));
+  }, [tabIds, currentId, loaded]);
 
   const draftOf = useCallback((id: string, d: Record<string, Draft>): Draft | undefined => {
     if (d[id]) return d[id];
@@ -160,7 +167,7 @@ export default function Workspace() {
       setDrafts((d) => (d[saved.id] ? { ...d, [saved.id]: { ...d[saved.id], tpl: saved, dirty: false } } : d));
       toast.success("Label saved");
     },
-    onError: () => toast.error("Save failed"),
+    onError: (e) => toast.error("Save failed", { description: apiErrorDetail(e, "The server did not answer — check your connection and try again.") }),
   });
   const create = useMutation({
     mutationFn: (body: TemplateBase) => apiPost<Template>("/templates", body),
@@ -169,7 +176,7 @@ export default function Workspace() {
       openTab(t.id);
       toast.success(`"${t.name}" created`);
     },
-    onError: () => toast.error("Could not create label"),
+    onError: (e) => toast.error("Could not create label", { description: apiErrorDetail(e, "The server did not answer — check your connection and try again.") }),
   });
   const duplicate = useMutation({
     mutationFn: (id: string) => apiPost<Template>(`/templates/${id}/duplicate`),
@@ -204,6 +211,8 @@ export default function Workspace() {
     const server = templates.find((t) => t.id === tpl.id);
     if (server) putTemplate(server.id, { ...toBase(server), ...patch }).then(syncSaved).catch(() => toast.error(errorMsg));
   };
+  // new labels keep using the sheet / Excel file you're working with
+  const createLinked = (b: TemplateBase) => create.mutate({ ...b, source_id: b.source_id ?? source?.id ?? null });
   const linkSource = (id: string | null) => persist({ source_id: id }, "Could not link sheet");
   const onImported = (created: SheetSource[]) => { linkSource(created[0].id); setDialog(null); setGridCollapsed(false); };
 
@@ -428,8 +437,10 @@ export default function Workspace() {
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <ImageLibrary open={library !== null} onOpenChange={(o) => !o && setLibrary(null)} onPick={pickImage}
         title={library === "background" ? "Choose a background picture" : library === "logo" ? "Choose your logo" : "Choose an image"} />
-      <NewLabelDialog open={dialog === "new"} onOpenChange={(o) => setDialog(o ? "new" : null)} brands={brands} pending={create.isPending} onCreate={(b) => create.mutate(b)} />
-      <OpenLabelDialog open={dialog === "open"} onOpenChange={(o) => setDialog(o ? "open" : null)} templates={templates} onOpen={openTab}
+      <NewLabelDialog open={dialog === "new"} onOpenChange={(o) => setDialog(o ? "new" : null)} brands={brands} pending={create.isPending} onCreate={createLinked} />
+      <OpenLabelDialog open={dialog === "open"} onOpenChange={(o) => { setDialog(o ? "open" : null); if (o) templatesQ.refetch(); }} templates={templates}
+        loading={templatesQ.isFetching && !templates.length} error={templatesQ.isError ? apiErrorDetail(templatesQ.error, "Could not load labels") : null} onRetry={() => templatesQ.refetch()} onOpen={openTab}
+        onCreate={createLinked} creating={create.isPending} currentId={currentId}
         onDuplicate={(id) => duplicate.mutate(id)} onDelete={(t) => confirm(`Delete "${t.name}"?`) && remove.mutate(t.id)} />
       <Dialog open={dialog === "import"} onOpenChange={(o) => setDialog(o ? "import" : null)}>
         <DialogContent data-testid="import-dialog">

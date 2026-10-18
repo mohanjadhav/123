@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
 from typing import List
 
+import logging
+
 from fastapi import APIRouter, HTTPException
+from pydantic import ValidationError
 
 from lib.db import db
 from models.labels import Template, TemplateBase
@@ -11,8 +14,14 @@ router = APIRouter(tags=["templates"])
 
 @router.get("/templates", response_model=List[Template])
 async def list_templates():
-    docs = await db.templates.find({}, {"_id": 0}).sort("updated_at", -1).to_list(1000)
-    return [Template(**d) for d in docs]
+    docs = await db.templates.find({}, {"_id": 0}).sort("updated_at", -1).to_list(5000)
+    out: List[Template] = []
+    for d in docs:  # one damaged label must never hide all the others
+        try:
+            out.append(Template(**d))
+        except ValidationError as exc:
+            logging.warning("skipping invalid template %s: %s", d.get("id"), exc.errors()[:3])
+    return out
 
 
 @router.get("/templates/{id}", response_model=Template)

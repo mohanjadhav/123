@@ -6,11 +6,29 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { DEFAULT_PAGE_SETUP, MM_TO_PX } from "@/lib/label";
 import { STARTERS } from "@/lib/starters";
+import type { Starter } from "@/lib/starters";
 import type { Template, TemplateBase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const fit = (t: { width_mm: number; height_mm: number }, w: number, h: number) =>
   Math.min(w / (t.width_mm * MM_TO_PX), h / (t.height_mm * MM_TO_PX), 1.5);
+
+/** Build a new label from a ready-made starter (fresh element ids). */
+export function starterToTemplate(starter: Starter, opts: { name?: string; brand?: string; w?: number; h?: number } = {}): TemplateBase {
+  return {
+    ...starter.tpl,
+    width_mm: opts.w ?? starter.tpl.width_mm,
+    height_mm: opts.h ?? starter.tpl.height_mm,
+    elements: starter.tpl.elements.map((e) => ({ ...e, id: crypto.randomUUID() })),
+    name: opts.name?.trim() || starter.title,
+    brand: opts.brand?.trim() || "General",
+    source_id: null,
+    page_setup: DEFAULT_PAGE_SETUP,
+    background_image: "",
+    background_fit: "cover",
+    background_opacity: 1,
+  };
+}
 
 export function NewLabelDialog({ open, onOpenChange, brands, onCreate, pending }: {
   open: boolean;
@@ -29,19 +47,7 @@ export function NewLabelDialog({ open, onOpenChange, brands, onCreate, pending }
     const w = key === "blank" ? parseFloat(size.w) : starter.tpl.width_mm;
     const h = key === "blank" ? parseFloat(size.h) : starter.tpl.height_mm;
     if (!(w > 0) || !(h > 0)) return;
-    onCreate({
-      ...starter.tpl,
-      width_mm: w,
-      height_mm: h,
-      elements: starter.tpl.elements.map((e) => ({ ...e, id: crypto.randomUUID() })),
-      name: name.trim() || starter.title,
-      brand: brand.trim() || "General",
-      source_id: null,
-      page_setup: DEFAULT_PAGE_SETUP,
-      background_image: "",
-      background_fit: "cover",
-      background_opacity: 1,
-    });
+    onCreate(starterToTemplate(starter, { name, brand, w, h }));
   };
 
   return (
@@ -93,8 +99,14 @@ export function NewLabelDialog({ open, onOpenChange, brands, onCreate, pending }
   );
 }
 
-export function OpenLabelDialog({ open, onOpenChange, templates, onOpen, onDuplicate, onDelete }: {
+export function OpenLabelDialog({ open, onOpenChange, templates, loading, error, onRetry, onOpen, onDuplicate, onDelete, onCreate, creating, currentId }: {
   open: boolean;
+  onCreate: (t: TemplateBase) => void;
+  creating: boolean;
+  currentId: string;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
   onOpenChange: (o: boolean) => void;
   templates: Template[];
   onOpen: (id: string) => void;
@@ -102,13 +114,8 @@ export function OpenLabelDialog({ open, onOpenChange, templates, onOpen, onDupli
   onDelete: (t: Template) => void;
 }) {
   const [q, setQ] = useState("");
-  const groups = useMemo(() => {
-    const m = new Map<string, Template[]>();
-    templates
-      .filter((t) => !q || `${t.name} ${t.brand}`.toLowerCase().includes(q.toLowerCase()))
-      .forEach((t) => m.set(t.brand, [...(m.get(t.brand) ?? []), t]));
-    return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [templates, q]);
+  // all labels in one grid, most recently edited first (the list from the server is already sorted)
+  const shown = useMemo(() => templates.filter((t) => !q || `${t.name} ${t.brand}`.toLowerCase().includes(q.toLowerCase())), [templates, q]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -118,33 +125,54 @@ export function OpenLabelDialog({ open, onOpenChange, templates, onOpen, onDupli
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[#9CA3AF]" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by label or brand" className="pl-8" data-testid="open-label-search" />
         </div>
-        <div className="max-h-[60vh] overflow-y-auto pr-1">
-          {groups.length === 0 && <p className="py-6 text-center text-sm text-[#6B7280]">No labels found.</p>}
-          {groups.map(([brand, list]) => (
-            <div key={brand} className="mb-4">
-              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-(--app-accent)">{brand}</h4>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-                {list.map((t) => (
-                  <div key={t.id} data-testid={`template-card-${t.id}`} className="group overflow-hidden rounded-lg border border-[#D9DDE3] transition-[border-color] duration-150 hover:border-(--app-accent)">
-                    <button className="grid h-24 w-full place-items-center bg-[#F1F3F4]" onClick={() => onOpen(t.id)} data-testid={`open-template-${t.id}`}>
-                      <Scaled widthMm={t.width_mm} heightMm={t.height_mm} scale={fit(t, 160, 80)} className="shadow-[0_1px_4px_rgba(0,0,0,0.2)]">
-                        <LabelView template={t} />
-                      </Scaled>
-                    </button>
-                    <div className="flex items-center gap-1 px-2.5 py-1.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-[#1F2937]" data-testid={`template-name-${t.id}`}>{t.name}</p>
-                        <p className="text-[10px] text-[#6B7280]">{t.width_mm} × {t.height_mm} mm</p>
-                      </div>
-                      <Button variant="ghost" size="icon-xs" title="Open" data-testid={`edit-template-${t.id}`} onClick={() => onOpen(t.id)}><FolderOpen /></Button>
-                      <Button variant="ghost" size="icon-xs" title="Duplicate" data-testid={`duplicate-template-${t.id}`} onClick={() => onDuplicate(t.id)}><Copy /></Button>
-                      <Button variant="ghost" size="icon-xs" title="Delete" data-testid={`delete-template-${t.id}`} onClick={() => onDelete(t)}><Trash2 /></Button>
-                    </div>
+        <div className="max-h-[64vh] overflow-y-auto pr-1">
+          <section className="mb-4" data-testid="open-label-starters">
+            <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-(--app-accent)">Start new — blank or ready-made template</h4>
+            <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
+              {STARTERS.map((s) => (
+                <button key={s.key} disabled={creating} data-testid={`open-starter-${s.key}`} onClick={() => onCreate(starterToTemplate(s))} title={`Create a new label: ${s.title}`}
+                  className="group overflow-hidden rounded-lg border border-dashed border-[#C7CCD3] bg-white text-left transition-[border-color,transform] duration-150 hover:-translate-y-0.5 hover:border-(--app-accent) disabled:opacity-50">
+                  <div className="grid h-16 place-items-center bg-[#F8F9FB]">
+                    {s.key === "blank" ? <span className="grid size-9 place-items-center rounded-full bg-(--app-accent-soft) text-xl text-(--app-accent)">+</span> : (
+                      <Scaled widthMm={s.tpl.width_mm} heightMm={s.tpl.height_mm} scale={fit(s.tpl, 90, 52)} className="shadow-[0_1px_3px_rgba(0,0,0,0.2)]"><LabelView template={s.tpl} /></Scaled>
+                    )}
                   </div>
-                ))}
-              </div>
+                  <p className="truncate px-2 py-1 text-[11px] font-medium text-[#1F2937]">{s.key === "blank" ? "New blank label" : s.title}</p>
+                </button>
+              ))}
             </div>
-          ))}
+          </section>
+          <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#4B5563]">Your saved labels</h4>
+          {error && (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-[#F5C2C0] bg-[#FDECEA] px-3 py-2 text-sm text-[#C5221F]" data-testid="open-label-error">
+              <span className="flex-1">Couldn't load your labels: {error}</span>
+              <Button size="sm" variant="outline" className="bg-white" onClick={onRetry} data-testid="open-label-retry">Retry</Button>
+            </div>
+          )}
+          {loading && <p className="py-6 text-center text-sm text-[#6B7280]" data-testid="open-label-loading">Loading labels…</p>}
+          {!loading && !error && shown.length === 0 && <p className="py-6 text-center text-sm text-[#6B7280]">{q ? "No labels match your search." : "No labels yet — create one with New label."}</p>}
+          {!loading && <p className="mb-2 text-[11px] text-[#9CA3AF]" data-testid="open-label-count">{templates.length} label{templates.length === 1 ? "" : "s"} saved</p>}
+          <div className="grid grid-cols-3 gap-2 md:grid-cols-5" data-testid="open-label-grid">
+            {shown.map((t) => (
+              <div key={t.id} data-testid={`template-card-${t.id}`} className={cn("group overflow-hidden rounded-lg border bg-white transition-[border-color,box-shadow] duration-150 hover:border-(--app-accent) hover:shadow-md", t.id === currentId ? "border-(--app-accent) ring-1 ring-(--app-accent)" : "border-[#D9DDE3]")}>
+                <button className="relative grid h-20 w-full place-items-center bg-[#F1F3F4]" onClick={() => onOpen(t.id)} data-testid={`open-template-${t.id}`} title={`Open ${t.name}`}>
+                  <Scaled widthMm={t.width_mm} heightMm={t.height_mm} scale={fit(t, 120, 64)} className="shadow-[0_1px_4px_rgba(0,0,0,0.2)]">
+                    <LabelView template={t} />
+                  </Scaled>
+                  {t.id === currentId && <span className="absolute left-1.5 top-1.5 rounded bg-(--app-accent) px-1.5 py-0.5 text-[9px] font-semibold text-white">IN USE</span>}
+                </button>
+                <div className="px-2.5 pt-1.5">
+                  <p className="truncate text-[13px] font-medium text-[#1F2937]" title={t.name} data-testid={`template-name-${t.id}`}>{t.name}</p>
+                  <p className="truncate text-[10px] text-[#6B7280]" title={t.brand}>{t.brand} · {t.width_mm}×{t.height_mm} mm</p>
+                </div>
+                <div className="flex items-center gap-0.5 px-1.5 pb-1">
+                  <Button variant="ghost" size="xs" className="h-6 flex-1 justify-start px-1.5 text-[11px] text-(--app-accent)" data-testid={`edit-template-${t.id}`} onClick={() => onOpen(t.id)}><FolderOpen /> Open</Button>
+                  <Button variant="ghost" size="icon-xs" title="Duplicate" data-testid={`duplicate-template-${t.id}`} onClick={() => onDuplicate(t.id)}><Copy /></Button>
+                  <Button variant="ghost" size="icon-xs" title="Delete" data-testid={`delete-template-${t.id}`} onClick={() => onDelete(t)}><Trash2 /></Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

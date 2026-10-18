@@ -3,21 +3,28 @@ import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
 import type { BarcodeFormat } from "@/lib/types";
 
-export function BarcodeSvg({ value, format, showText }: { value: string; format: BarcodeFormat; showText: boolean }) {
+/**
+ * Vector barcode. With a printer `dpi` (203/300/600) each bar module is snapped to a whole number of
+ * printer dots, so thermal printers render perfectly sharp, scannable bars (no blurred / uneven bars).
+ */
+export function BarcodeSvg({ value, format, showText, widthMm = 0, dpi = 0 }: { value: string; format: BarcodeFormat; showText: boolean; widthMm?: number; dpi?: number }) {
   const ref = useRef<SVGSVGElement>(null);
   const [error, setError] = useState(false);
+  const [modules, setModules] = useState(0);
 
   useLayoutEffect(() => {
     const svg = ref.current;
     if (!svg || !value) return;
     try {
-      JsBarcode(svg, value, { format, displayValue: false, margin: 0, height: 100, width: 2, background: "transparent" });
+      JsBarcode(svg, value, { format, displayValue: false, margin: 0, height: 100, width: 1, background: "transparent" });
       const w = svg.getAttribute("width") ?? "100";
       const h = svg.getAttribute("height") ?? "100";
       svg.setAttribute("viewBox", `0 0 ${parseFloat(w)} ${parseFloat(h)}`);
       svg.setAttribute("width", "100%");
       svg.setAttribute("height", "100%");
       svg.setAttribute("preserveAspectRatio", "none");
+      svg.setAttribute("shape-rendering", "crispEdges");
+      setModules(parseFloat(w));
       setError(false);
     } catch {
       setError(true);
@@ -33,8 +40,8 @@ export function BarcodeSvg({ value, format, showText }: { value: string; format:
   }
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="min-h-0 flex-1">
-        <svg ref={ref} className="block h-full w-full" />
+      <div className="flex min-h-0 flex-1 justify-center">
+        <svg ref={ref} className="block h-full" style={{ width: snapWidth(widthMm, modules, dpi) ?? "100%" }} />
       </div>
       {showText && (
         <div className="text-center leading-none" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "6.5pt", paddingTop: "0.6mm" }}>
@@ -43,6 +50,14 @@ export function BarcodeSvg({ value, format, showText }: { value: string; format:
       )}
     </div>
   );
+}
+
+/** Barcode width (mm) rounded down to whole printer dots per module; null = fill the box. */
+function snapWidth(widthMm: number, modules: number, dpi: number): string | null {
+  if (!dpi || !widthMm || !modules) return null;
+  const dot = 25.4 / dpi;
+  const dotsPerModule = Math.max(1, Math.floor(widthMm / modules / dot));
+  return `${dotsPerModule * dot * modules}mm`;
 }
 
 export function QrSvg({ value, color }: { value: string; color: string }) {

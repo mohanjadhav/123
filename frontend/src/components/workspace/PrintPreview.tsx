@@ -75,7 +75,7 @@ export function SheetPage({ spec, ps, template, slots, mapping, outlineEmpty, pa
       >
         {cells.map((r, i) =>
           r ? (
-            <LabelView key={i} template={template} row={r} mapping={mapping} />
+            <LabelView key={i} template={template} row={r} mapping={mapping} dpi={ps.dpi ?? 0} />
           ) : (
             <div key={i} className={outlineEmpty ? "border border-dashed border-[#C7CCD3]" : undefined} />
           ),

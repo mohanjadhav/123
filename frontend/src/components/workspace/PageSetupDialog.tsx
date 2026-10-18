@@ -144,6 +144,10 @@ function Inner({ template, initial, onSave, onClose }: { template: LabelShape; i
           </section>
 
           <section className="grid gap-3">
+            <h4 className="text-xs font-semibold text-[#1F2937]">Printer resolution (HD barcodes)</h4>
+            <Segment testId="page-setup-dpi" value={String(ps.dpi ?? 0)} onChange={(v) => set({ dpi: Number(v) })}
+              options={[{ v: "0", label: "Any / office" }, { v: "203", label: "203 dpi" }, { v: "300", label: "300 dpi" }, { v: "600", label: "600 dpi" }]} />
+            <p className="-mt-2 text-[11px] text-[#6B7280]">Pick your thermal printer's DPI (see its spec sticker) — barcode bars snap to whole printer dots for razor-sharp, scannable codes.</p>
             <h4 className="text-xs font-semibold text-[#1F2937]">Printer adjustment</h4>
             <p className="-mt-2 text-[11px] text-[#6B7280]">If prints come out shifted, move everything by a few mm (negative = left / up).</p>
             <div className="grid grid-cols-2 gap-2">

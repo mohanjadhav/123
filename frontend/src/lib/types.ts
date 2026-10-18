@@ -1,5 +1,8 @@
 // Hand-written mirrors of backend/models/labels.py — keep in sync.
-export type ElementType = "text" | "barcode" | "qrcode" | "rect" | "image";
+export type ElementType = "text" | "barcode" | "qrcode" | "rect" | "image" | "line" | "icon" | "table";
+export type ShapeKind = "rect" | "ellipse" | "triangle" | "star" | "arrow" | "diamond" | "hexagon";
+export type StrokeStyle = "solid" | "dashed" | "dotted";
+export type Fit = "contain" | "cover" | "fill";
 export type BarcodeFormat = "CODE128" | "CODE39" | "EAN13" | "UPC" | "ITF14";
 export type Align = "left" | "center" | "right";
 
@@ -26,7 +29,18 @@ export interface LabelElement {
   barcode_format: BarcodeFormat;
   show_text: boolean;
   image_url: string;
-  rotation: number;
+  rotation: number; // degrees, any angle
+  shape: ShapeKind; // for type "rect"
+  fill2: string; // gradient end colour ("" = solid)
+  gradient_angle: number;
+  stroke_style: StrokeStyle;
+  opacity: number; // 0..1
+  arrows: "none" | "end" | "both"; // for type "line"
+  icon: string; // icon-library key for type "icon"
+  image_fit: Fit;
+  table_rows: number;
+  table_cols: number;
+  table_header: boolean;
 }
 
 export interface PageSetup {
@@ -46,10 +60,12 @@ export interface PageSetup {
   offset_y: number;
   order: "across" | "down";
   start_position: number;
+  dpi: number; // printer resolution; 0 = vector/any, 203/300/600 snaps barcode bars to printer dots
 }
 
 /** What the label renderer needs. */
-export type LabelShape = Pick<TemplateBase, "width_mm" | "height_mm" | "background" | "elements">;
+export type LabelShape = Pick<TemplateBase, "width_mm" | "height_mm" | "background" | "elements">
+  & Partial<Pick<TemplateBase, "background_image" | "background_fit" | "background_opacity">>;
 
 export interface TemplateBase {
   name: string;
@@ -57,6 +73,9 @@ export interface TemplateBase {
   width_mm: number;
   height_mm: number;
   background: string;
+  background_image: string; // full-label background picture
+  background_fit: "cover" | "contain" | "fill";
+  background_opacity: number;
   elements: LabelElement[];
   source_id: string | null;
   page_setup: PageSetup;
@@ -147,5 +166,15 @@ export interface QueueJob {
   source_name: string;
   items: QueueItem[];
   selected: boolean;
+  created_at: string;
+}
+
+// backend/models/images.py
+export interface ImageAsset {
+  id: string;
+  name: string;
+  content_type: string;
+  size: number;
+  url: string; // relative /api URL usable directly in labels
   created_at: string;
 }

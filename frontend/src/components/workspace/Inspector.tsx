@@ -1,19 +1,71 @@
-import type { ChangeEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Bold, CopyPlus, Italic, Strikethrough, Trash2, Underline,
+  AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Bold, CopyPlus, ImagePlus, Italic, RotateCcw, RotateCw, Strikethrough, Trash2, Underline, X,
 } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FONTS, SIZE_PRESETS } from "@/lib/label";
-import type { BarcodeFormat, LabelElement, TemplateBase } from "@/lib/types";
+import { ICONS } from "@/lib/icons";
+import type { BarcodeFormat, Fit, LabelElement, ShapeKind, StrokeStyle, TemplateBase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const BARCODE_FORMATS: BarcodeFormat[] = ["CODE128", "CODE39", "EAN13", "UPC", "ITF14"];
-const TYPE_LABEL: Record<LabelElement["type"], string> = { text: "Text", barcode: "Barcode", qrcode: "QR code", rect: "Shape", image: "Image" };
+const TYPE_LABEL: Record<LabelElement["type"], string> = { text: "Text", barcode: "Barcode", qrcode: "QR code", rect: "Shape", image: "Image", line: "Line", icon: "Icon", table: "Table" };
+const SHAPE_LABEL: Record<ShapeKind, string> = { rect: "Rectangle / rounded box", ellipse: "Circle / ellipse", triangle: "Triangle", star: "Star", arrow: "Block arrow", diamond: "Diamond", hexagon: "Hexagon" };
+const FIT_LABEL: Record<Fit, string> = { contain: "Fit inside (keep shape)", cover: "Fill & crop", fill: "Stretch" };
+
+function Pick<T extends string>({ label, value, options, onChange, testId }: { label: string; value: T; options: Record<T, string>; onChange: (v: T) => void; testId: string }) {
+  return (
+    <label className="grid gap-0.5 text-[10px] text-[#6B7280]">{label}
+      <Select value={value} onValueChange={(v: string) => onChange(v as T)}>
+        <SelectTrigger className="h-8 w-full bg-white text-xs" data-testid={testId}><SelectValue>{(v: string) => options[v as T] ?? v}</SelectValue></SelectTrigger>
+        <SelectContent>{(Object.keys(options) as T[]).map((k) => <SelectItem key={k} value={k}>{options[k]}</SelectItem>)}</SelectContent>
+      </Select>
+    </label>
+  );
+}
+
+function Slider({ label, value, min, max, step, onChange, testId, fmt }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void; testId: string; fmt: (v: number) => string }) {
+  return (
+    <label className="grid gap-0.5 text-[10px] text-[#6B7280]">
+      <span className="flex justify-between">{label}<span className="font-mono text-[#374151]">{fmt(value)}</span></span>
+      <input type="range" min={min} max={max} step={step} value={value} data-testid={testId} onChange={(e) => onChange(parseFloat(e.target.value))} className="accent-(--app-accent)" />
+    </label>
+  );
+}
+
+const STROKE_STYLES: Record<StrokeStyle, string> = { solid: "Solid", dashed: "Dashed", dotted: "Dotted" };
+
+/** Fill colour with optional gradient (second colour + angle). */
+function FillEditor({ el, onEl, label = "Fill" }: { el: LabelElement; onEl: (p: Partial<LabelElement>) => void; label?: string }) {
+  const grad = !!el.fill2;
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-end gap-2">
+        <Color label={label} testId="prop-fill-input" allowNone={!grad} value={el.fill} onChange={(v) => onEl({ fill: v })} />
+        <label className="flex items-center gap-1.5 pb-1.5 text-[11px] text-[#374151]">
+          <Checkbox data-testid="prop-gradient-toggle" checked={grad} onCheckedChange={(c) => onEl(c ? { fill2: "#1A73E8", fill: el.fill === "transparent" ? "#FFFFFF" : el.fill } : { fill2: "" })} /> Gradient
+        </label>
+        {grad && <Color label="To colour" testId="prop-fill2-input" value={el.fill2} onChange={(v) => onEl({ fill2: v })} />}
+      </div>
+      {grad && <Slider label="Gradient angle" testId="prop-gradient-angle" min={0} max={360} step={15} value={el.gradient_angle ?? 90} fmt={(v) => `${v}°`} onChange={(v) => onEl({ gradient_angle: v })} />}
+    </div>
+  );
+}
+
+function BorderEditor({ el, onEl, radius }: { el: LabelElement; onEl: (p: Partial<LabelElement>) => void; radius?: boolean }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <Color label="Border colour" testId="prop-stroke-input" value={el.stroke} onChange={(v) => onEl({ stroke: v })} />
+      <Num label="Border (mm)" testId="prop-stroke-width-input" step={0.1} value={el.stroke_width} onChange={(v) => onEl({ stroke_width: Math.max(0, v) })} />
+      <Pick label="Border style" testId="prop-stroke-style-select" value={el.stroke_style ?? "solid"} options={STROKE_STYLES} onChange={(v) => onEl({ stroke_style: v })} />
+      {radius && <Num label="Corner radius (mm)" testId="prop-radius-input" value={el.radius} onChange={(v) => onEl({ radius: Math.max(0, v) })} />}
+    </div>
+  );
+}
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -61,7 +113,7 @@ function Toggle({ active, onClick, children, testId, title }: { active: boolean;
   );
 }
 
-export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDuplicate, onDelete, onInsertField }: {
+export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDuplicate, onDelete, onInsertField, onOpenLibrary }: {
   tpl: TemplateBase;
   selected: LabelElement | null;
   columns: string[];
@@ -71,6 +123,7 @@ export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDu
   onDuplicate: () => void;
   onDelete: () => void;
   onInsertField: (col: string) => void;
+  onOpenLibrary: (target: "replace" | "background") => void;
 }) {
   if (!selected) {
     return (
@@ -99,6 +152,33 @@ export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDu
         <Group title="Appearance">
           <Color label="Label colour" testId="template-background-input" value={tpl.background} onChange={(v) => onTpl({ background: v })} />
         </Group>
+        <Group title="Background picture">
+          <div className="grid gap-2" data-testid="template-background-image-group">
+            {tpl.background_image ? (
+              <div className="flex items-center gap-2">
+                <div className="true-color grid size-12 shrink-0 place-items-center overflow-hidden rounded border border-[#E5E7EB] bg-[#F3F4F6]">
+                  {tpl.background_image.includes("{{") ? <span className="px-0.5 text-center font-mono text-[8px]">{tpl.background_image}</span> : <img src={tpl.background_image} alt="" className="max-h-full max-w-full object-contain" />}
+                </div>
+                <Button size="sm" variant="outline" className="bg-white" data-testid="template-background-change" onClick={() => onOpenLibrary("background")}><ImagePlus /> Change</Button>
+                <Button size="icon-sm" variant="ghost" title="Remove background picture" data-testid="template-background-remove" onClick={() => onTpl({ background_image: "" })}><X /></Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" className="justify-start bg-white" data-testid="template-background-choose" onClick={() => onOpenLibrary("background")}><ImagePlus /> Choose background picture…</Button>
+            )}
+            {columns.length > 0 && (
+              <Select value="" onValueChange={(v: string) => onTpl({ background_image: `{{${v}}}` })}>
+                <SelectTrigger className="h-8 w-full bg-white text-xs" data-testid="template-background-column"><SelectValue placeholder="…or picture link from a sheet column">{() => "…or picture link from a sheet column"}</SelectValue></SelectTrigger>
+                <SelectContent>{columns.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
+            )}
+            {tpl.background_image && (
+              <>
+                <Pick label="Fit" testId="template-background-fit" value={tpl.background_fit ?? "cover"} options={FIT_LABEL} onChange={(v) => onTpl({ background_fit: v })} />
+                <Slider label="Picture opacity" testId="template-background-opacity" min={0.05} max={1} step={0.05} value={tpl.background_opacity ?? 1} fmt={(v) => `${Math.round(v * 100)}%`} onChange={(v) => onTpl({ background_opacity: v })} />
+              </>
+            )}
+          </div>
+        </Group>
         <p className="px-3 py-3 text-[11px] leading-relaxed text-[#6B7280]">
           Click an element to edit it. Drag fields from <b>Data fields</b> onto the label. Arrow keys nudge (Shift = 5 mm), Ctrl+Z / Ctrl+Y undo &amp; redo, Ctrl+S saves.
         </p>
@@ -107,20 +187,16 @@ export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDu
   }
 
   const el = selected;
-  const onImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 1_500_000) return toast.error("Image must be under 1.5 MB");
-    const reader = new FileReader();
-    reader.onload = () => onEl({ image_url: String(reader.result) });
-    reader.readAsDataURL(file);
-  };
+  const isShape = el.type === "rect";
+  const isRectShape = isShape && (!el.shape || el.shape === "rect");
 
   return (
     <div data-testid="prop-inspector-panel">
-      <div className="border-b border-[#E5E7EB] bg-[#F8F9FB] px-3 py-2 text-xs font-semibold text-[#1F2937]">{TYPE_LABEL[el.type]} properties</div>
+      <div className="border-b border-[#E5E7EB] bg-[#F8F9FB] px-3 py-2 text-xs font-semibold text-[#1F2937]">
+        {isShape && el.shape && el.shape !== "rect" ? SHAPE_LABEL[el.shape] : TYPE_LABEL[el.type]} properties
+      </div>
 
-      {el.type !== "rect" && el.type !== "image" && (
+      {(el.type === "text" || el.type === "barcode" || el.type === "qrcode") && (
         <Group title={el.type === "text" ? "Text" : "Value"}>
           <Textarea data-testid="prop-content-input" rows={3} className="bg-white font-mono text-xs" value={el.content}
             onChange={(e) => onEl({ content: e.target.value })} placeholder="Type text or insert a {{field}}" />
@@ -133,7 +209,31 @@ export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDu
         </Group>
       )}
 
-      {el.type === "text" && (
+      {el.type === "table" && (
+        <Group title="Table">
+          <div className="grid gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Num label="Rows" testId="prop-table-rows" step={1} value={el.table_rows} onChange={(v) => onEl({ table_rows: Math.max(1, Math.min(30, Math.round(v))) })} />
+              <Num label="Columns" testId="prop-table-cols" step={1} value={el.table_cols} onChange={(v) => onEl({ table_cols: Math.max(1, Math.min(12, Math.round(v))) })} />
+            </div>
+            <Textarea data-testid="prop-table-content" rows={4} className="bg-white font-mono text-xs" value={el.content} onChange={(e) => onEl({ content: e.target.value })} />
+            <p className="-mt-1 text-[10px] leading-snug text-[#9CA3AF]">One line per row, separate cells with <b>|</b>. Fields work too, e.g. <span className="font-mono">MRP|{"{{MRP}}"}</span></p>
+            {columns.length > 0 && (
+              <Select value="" onValueChange={(v: string) => onEl({ content: `${el.content}${el.content.endsWith("\n") || !el.content ? "" : "|"}{{${v}}}` })}>
+                <SelectTrigger className="h-8 w-full bg-white" data-testid="prop-table-field-select"><SelectValue placeholder="Insert data field…">{() => "Insert data field…"}</SelectValue></SelectTrigger>
+                <SelectContent>{columns.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
+            )}
+            <label className="flex items-center gap-2 text-xs text-[#374151]">
+              <Checkbox data-testid="prop-table-header" checked={el.table_header} onCheckedChange={(c) => onEl({ table_header: !!c })} /> First row is a bold header
+            </label>
+            {el.table_header && <FillEditor el={el} onEl={onEl} label="Header fill" />}
+            <BorderEditor el={el} onEl={onEl} />
+          </div>
+        </Group>
+      )}
+
+      {(el.type === "text" || el.type === "table") && (
         <Group title="Font">
           <div className="grid gap-2">
             <Select value={el.font_family} onValueChange={(v: string) => onEl({ font_family: v })}>
@@ -156,8 +256,16 @@ export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDu
                 <Toggle title="Align right" testId="prop-align-right" active={el.align === "right"} onClick={() => onEl({ align: "right" })}><AlignRight /></Toggle>
               </div>
               <Color label="Colour" testId="prop-color-input" value={el.color} onChange={(v) => onEl({ color: v })} />
-              <Color label="Background" testId="prop-fill-input" allowNone value={el.fill} onChange={(v) => onEl({ fill: v })} />
             </div>
+          </div>
+        </Group>
+      )}
+
+      {el.type === "text" && (
+        <Group title="Box">
+          <div className="grid gap-2">
+            <FillEditor el={el} onEl={onEl} label="Background" />
+            <BorderEditor el={el} onEl={onEl} radius />
           </div>
         </Group>
       )}
@@ -172,6 +280,7 @@ export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDu
             <label className="flex items-center gap-2 text-xs text-[#374151]">
               <Checkbox data-testid="prop-show-text-checkbox" checked={el.show_text} onCheckedChange={(c) => onEl({ show_text: !!c })} /> Show number under bars
             </label>
+            <p className="text-[10px] leading-snug text-[#9CA3AF]">For thermal printers set the printer DPI in Page setup — bars snap to printer dots for sharp scans.</p>
           </div>
         </Group>
       )}
@@ -182,23 +291,58 @@ export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDu
         </Group>
       )}
 
-      {el.type === "image" && (
-        <Group title="Image">
+      {el.type === "icon" && (
+        <Group title="Icon">
           <div className="grid gap-2">
-            <Input data-testid="prop-image-url-input" className="h-8 bg-white text-xs" placeholder="https://… or {{image_column}}"
-              value={el.image_url.startsWith("data:") ? "(uploaded image)" : el.image_url} onChange={(e) => onEl({ image_url: e.target.value })} />
-            <Input type="file" accept="image/*" data-testid="prop-image-upload-input" className="h-8 bg-white text-xs" onChange={onImageUpload} />
+            <div className="grid max-h-40 grid-cols-6 gap-1 overflow-y-auto rounded border border-[#E5E7EB] p-1" data-testid="prop-icon-grid">
+              {ICONS.map((i) => (
+                <button key={i.key} title={i.label} data-testid={`prop-icon-${i.key}`} onClick={() => onEl({ icon: i.key, ...(i.color ? { color: i.color } : {}) })}
+                  className={cn("true-color grid size-8 place-items-center rounded p-1 transition-colors duration-150", el.icon === i.key ? "bg-(--app-accent-soft) ring-1 ring-(--app-accent)" : "hover:bg-[#F3F4F6]")}>
+                  {i.render(i.color ?? "#1F2937")}
+                </button>
+              ))}
+            </div>
+            <Color label="Colour" testId="prop-icon-color-input" value={el.color} onChange={(v) => onEl({ color: v })} />
           </div>
         </Group>
       )}
 
-      {el.type === "rect" && (
+      {el.type === "image" && (
+        <Group title="Image">
+          <div className="grid gap-2">
+            <Button size="sm" variant="outline" className="justify-start bg-white" data-testid="prop-image-library-button" onClick={() => onOpenLibrary("replace")}>
+              <ImagePlus /> {el.image_url ? "Change image (library / upload)" : "Choose image (library / upload)"}
+            </Button>
+            <Input data-testid="prop-image-url-input" className="h-8 bg-white text-xs" placeholder="https://… or {{image_column}}"
+              value={el.image_url.startsWith("data:") ? "(uploaded image)" : el.image_url.startsWith("/api/images/") ? "(library image)" : el.image_url} onChange={(e) => onEl({ image_url: e.target.value })} />
+            {columns.length > 0 && (
+              <Select value="" onValueChange={(v: string) => onEl({ image_url: `{{${v}}}` })}>
+                <SelectTrigger className="h-8 w-full bg-white text-xs" data-testid="prop-image-column-select"><SelectValue placeholder="Different picture per row (sheet column)…">{() => "Different picture per row (sheet column)…"}</SelectValue></SelectTrigger>
+                <SelectContent>{columns.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
+            )}
+            <Pick label="Fit" testId="prop-image-fit-select" value={el.image_fit ?? "contain"} options={FIT_LABEL} onChange={(v) => onEl({ image_fit: v })} />
+          </div>
+        </Group>
+      )}
+
+      {isShape && (
         <Group title="Shape">
+          <div className="grid gap-2">
+            <Pick label="Shape" testId="prop-shape-select" value={el.shape ?? "rect"} options={SHAPE_LABEL} onChange={(v) => onEl({ shape: v })} />
+            <FillEditor el={el} onEl={onEl} />
+            <BorderEditor el={el} onEl={onEl} radius={isRectShape} />
+          </div>
+        </Group>
+      )}
+
+      {el.type === "line" && (
+        <Group title="Line">
           <div className="grid grid-cols-2 gap-2">
-            <Color label="Fill" testId="prop-fill-input" allowNone value={el.fill} onChange={(v) => onEl({ fill: v })} />
-            <Color label="Border colour" testId="prop-stroke-input" value={el.stroke} onChange={(v) => onEl({ stroke: v })} />
-            <Num label="Border (mm)" testId="prop-stroke-width-input" step={0.1} value={el.stroke_width} onChange={(v) => onEl({ stroke_width: Math.max(0, v) })} />
-            <Num label="Corner radius (mm)" testId="prop-radius-input" value={el.radius} onChange={(v) => onEl({ radius: Math.max(0, v) })} />
+            <Color label="Colour" testId="prop-stroke-input" value={el.stroke} onChange={(v) => onEl({ stroke: v })} />
+            <Num label="Thickness (mm)" testId="prop-stroke-width-input" step={0.1} value={el.stroke_width} onChange={(v) => onEl({ stroke_width: Math.max(0.05, v) })} />
+            <Pick label="Style" testId="prop-stroke-style-select" value={el.stroke_style ?? "solid"} options={STROKE_STYLES} onChange={(v) => onEl({ stroke_style: v })} />
+            <Pick label="Arrowheads" testId="prop-arrows-select" value={el.arrows ?? "none"} options={{ none: "None", end: "One end", both: "Both ends" }} onChange={(v) => onEl({ arrows: v })} />
           </div>
         </Group>
       )}
@@ -210,12 +354,20 @@ export function Inspector({ tpl, selected, columns, onEl, onTpl, onArrange, onDu
           <Num label="Width" testId="prop-width-input" value={el.w} onChange={(v) => onEl({ w: Math.max(0.2, v) })} />
           <Num label="Height" testId="prop-height-input" value={el.h} onChange={(v) => onEl({ h: Math.max(0.2, v) })} />
         </div>
-        <label className="mt-2 grid gap-0.5 text-[10px] text-[#6B7280]">Rotation
-          <Select value={String(el.rotation)} onValueChange={(v: string) => onEl({ rotation: Number(v) })}>
-            <SelectTrigger className="h-8 w-full bg-white" data-testid="prop-rotation-select"><SelectValue>{(v) => `${v}°`}</SelectValue></SelectTrigger>
-            <SelectContent>{[0, 90, 180, 270].map((r) => <SelectItem key={r} value={String(r)}>{r}°</SelectItem>)}</SelectContent>
-          </Select>
-        </label>
+        <div className="mt-2 grid grid-cols-[1fr_auto] items-end gap-2">
+          <Num label="Rotation (°, any angle)" testId="prop-rotation-input" step={1} value={el.rotation} onChange={(v) => onEl({ rotation: ((Math.round(v * 10) / 10) % 360 + 360) % 360 })} />
+          <div className="flex gap-1">
+            <Toggle title="Rotate 15° left" testId="prop-rotate-left" active={false} onClick={() => onEl({ rotation: (el.rotation + 345) % 360 })}><RotateCcw /></Toggle>
+            <Toggle title="Rotate 15° right" testId="prop-rotate-right" active={false} onClick={() => onEl({ rotation: (el.rotation + 15) % 360 })}><RotateCw /></Toggle>
+            {[0, 90].map((r) => (
+              <button key={r} type="button" data-testid={`prop-rotation-${r}`} onClick={() => onEl({ rotation: r })}
+                className={cn("h-7 rounded border px-1.5 font-mono text-[10px]", el.rotation === r ? "border-(--app-accent) bg-(--app-accent-soft) text-(--app-accent)" : "border-[#D1D5DB] bg-white text-[#374151]")}>{r}°</button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-2">
+          <Slider label="Opacity" testId="prop-opacity-slider" min={0.05} max={1} step={0.05} value={el.opacity ?? 1} fmt={(v) => `${Math.round(v * 100)}%`} onChange={(v) => onEl({ opacity: v })} />
+        </div>
       </Group>
 
       <Group title="Arrange">

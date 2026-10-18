@@ -98,6 +98,7 @@ export function Canvas({ tpl, row, mapping, zoom, onZoom, fitZoom, selectedId, o
               <Scaled widthMm={tpl.width_mm} heightMm={tpl.height_mm} scale={zoom} className="shadow-[0_2px_10px_rgba(0,0,0,0.15)] outline outline-1 outline-[#C7CCD3]">
                 <LabelView
                   template={tpl}
+                  dpi={tpl.page_setup?.dpi ?? 0}
                   row={row}
                   mapping={mapping}
                   testId="canvas-label-stage"

@@ -54,3 +54,10 @@ No auth.
   - App size 70–140% (−/+ and slider): `#root { zoom }` and `.app-screen` height = 100dvh/zoom so every page fills exactly one screen. Canvas drag/drop & column resize divide pointer deltas by `uiZoom()`.
 - Toolbars never overflow the window: designer toolbar shows text only for key actions (xl+), others icon+tooltip; print-data toolbar wraps onto a second line (Print / Add to queue group stays visible).
 - Local file import: .xlsx/.xlsm, .xls (xlrd), .ods LibreOffice Calc (odfpy), .csv/.tsv — each workbook tab becomes one sheet.
+
+## HD design elements (latest)
+- Element types: text, barcode, qrcode, rect (with `shape`: rect | ellipse | triangle | star | arrow | diamond | hexagon), line (horizontal, any direction via free `rotation`; `arrows` none/end/both), icon (`icon` key from `lib/icons.tsx`: veg/non-veg marks, packaging, safety, contact, badges), table (`table_rows` × `table_cols`, `content` = one line per row, cells split by `|`, {{fields}} allowed, `table_header` bold+fill row), image (`image_fit` contain/cover/fill).
+- Styling on elements: fill + gradient (`fill2`, `gradient_angle`), border colour/width/`stroke_style` solid/dashed/dotted, corner radius, `opacity`, free `rotation` (float), to front/back. Shapes/lines/icons are SVG drawn in mm units (crisp at any DPI).
+- Template: `background_image` (library URL, link or {{column}}), `background_fit`, `background_opacity`.
+- Image library: `/api/images` (POST multipart `files`, GET list, GET `/{id}/file` raw bytes at original resolution, DELETE). Mongo collection `images` (bytes in `data`). Max 10 MB, image/* only. UI: `components/workspace/ImageLibrary.tsx`; left palette tools Image / Logo / Background open it; Inspector "Change image" and "Background picture" too.
+- Page setup `dpi` (0 | 203 | 300 | 600): barcode bar modules snapped to whole printer dots (`Codes.tsx` snapWidth).

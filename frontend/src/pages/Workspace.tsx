@@ -12,7 +12,8 @@ import { DataGrid } from "@/components/workspace/DataGrid";
 import { Inspector } from "@/components/workspace/Inspector";
 import { NewLabelDialog, OpenLabelDialog } from "@/components/workspace/LabelDialogs";
 import { LeftPanel } from "@/components/workspace/LeftPanel";
-import type { Tool } from "@/components/workspace/LeftPanel";
+import type { Library, Tool } from "@/components/workspace/LeftPanel";
+import { ImageLibrary } from "@/components/workspace/ImageLibrary";
 import { PrintPortal, PrintPreviewDialog } from "@/components/workspace/PrintPreview";
 import { RefreshDialog } from "@/components/workspace/RefreshDialog";
 import { useSheetCopy } from "@/lib/useSheetCopy";
@@ -44,6 +45,7 @@ const round = (n: number) => Math.round(n * 2) / 2;
 const fitZoomFor = (t: TemplateBase) => Math.max(0.3, Math.min(5, Math.min(560 / (t.width_mm * MM_TO_PX), 300 / (t.height_mm * MM_TO_PX))));
 const toBase = (t: Template): TemplateBase => ({
   name: t.name, brand: t.brand, width_mm: t.width_mm, height_mm: t.height_mm, background: t.background, elements: t.elements, source_id: t.source_id, page_setup: t.page_setup,
+  background_image: t.background_image ?? "", background_fit: t.background_fit ?? "cover", background_opacity: t.background_opacity ?? 1,
 });
 
 function ToolButton({ icon, label, onClick, disabled, testId, primary }: { icon: ReactNode; label: string; onClick: () => void; disabled?: boolean; testId: string; primary?: boolean }) {
@@ -230,10 +232,27 @@ export default function Workspace() {
     if (!selected) return addEl({ ...newElement("text", tpl), content: tag });
     if (selected.type === "image") updateEl(selected.id, { image_url: tag });
     else if (selected.type === "text") updateEl(selected.id, { content: selected.content ? `${selected.content} ${tag}` : tag });
-    else if (selected.type === "rect") addEl({ ...newElement("text", tpl), content: tag });
+    else if (selected.type === "table") updateEl(selected.id, { content: `${selected.content}|${tag}` });
+    else if (["rect", "line", "icon"].includes(selected.type)) addEl({ ...newElement("text", tpl), content: tag });
     else updateEl(selected.id, { content: tag });
   };
-  const addTool = (t: Tool) => tpl && addEl({ ...newElement(t.type, tpl), ...(t.type === "rect" ? { w: Math.min(30, tpl.width_mm - 6) } : {}), ...t.patch });
+  const [library, setLibrary] = useState<null | Library | "replace">(null);
+  const addTool = (t: Tool) => {
+    if (!tpl) return;
+    if (t.library) return setLibrary(t.library);
+    if (!t.type) return;
+    const el = { ...newElement(t.type, tpl), ...t.patch };
+    const w = Math.min(el.w, tpl.width_mm - 4), h = Math.min(el.h, tpl.height_mm - 4);
+    const step = (tpl.elements.length % 6) * 2.5; // cascade so new elements don't stack exactly on top of each other
+    addEl({ ...el, w, h, x: Math.max(0, Math.min(el.x + step, tpl.width_mm - w)), y: Math.max(0, Math.min(el.y + step, tpl.height_mm - h)) });
+  };
+  const pickImage = (url: string) => {
+    if (!tpl) return;
+    if (library === "background") return change((t) => ({ ...t, background_image: url }));
+    if (library === "replace" && selected?.type === "image") return updateEl(selected.id, { image_url: url });
+    const logo = library === "logo";
+    addEl({ ...newElement("image", tpl), image_url: url, ...(logo ? { x: 2, y: 2, w: Math.min(18, tpl.width_mm - 4), h: Math.min(10, tpl.height_mm - 4) } : {}) });
+  };
   const dropField = (col: string, x: number, y: number) => tpl && addEl({ ...newElement("text", tpl), content: `{{${col}}}`, x, y });
   const arrange = (dir: "front" | "back") => selected && change((t) => {
     const rest = t.elements.filter((e) => e.id !== selected.id);
@@ -323,7 +342,7 @@ export default function Workspace() {
             <aside className="w-72 shrink-0 overflow-y-auto border-l border-[#D9DDE3] bg-white">
               <Inspector tpl={tpl} selected={selected} columns={columns}
                 onEl={(p) => selected && updateEl(selected.id, p)} onTpl={(p) => change((t) => ({ ...t, ...p }))}
-                onArrange={arrange} onDuplicate={duplicateEl} onDelete={() => selected && removeEl(selected.id)} onInsertField={insertField} />
+                onArrange={arrange} onDuplicate={duplicateEl} onDelete={() => selected && removeEl(selected.id)} onInsertField={insertField} onOpenLibrary={setLibrary} />
             </aside>
           </div>
           <DataGrid sources={sources} activeSourceId={source?.id ?? null} onChooseSource={linkSource} onDeleteSource={(id) => deleteSource.mutate(id)}
@@ -350,6 +369,8 @@ export default function Workspace() {
         </div>
       )}
 
+      <ImageLibrary open={library !== null} onOpenChange={(o) => !o && setLibrary(null)} onPick={pickImage}
+        title={library === "background" ? "Choose a background picture" : library === "logo" ? "Choose your logo" : "Choose an image"} />
       <NewLabelDialog open={dialog === "new"} onOpenChange={(o) => setDialog(o ? "new" : null)} brands={brands} pending={create.isPending} onCreate={(b) => create.mutate(b)} />
       <OpenLabelDialog open={dialog === "open"} onOpenChange={(o) => setDialog(o ? "open" : null)} templates={templates} onOpen={openTab}
         onDuplicate={(id) => duplicate.mutate(id)} onDelete={(t) => confirm(`Delete "${t.name}"?`) && remove.mutate(t.id)} />

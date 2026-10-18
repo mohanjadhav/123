@@ -8,7 +8,7 @@ export interface Starter {
   key: string;
   title: string;
   description: string;
-  tpl: Omit<TemplateBase, "name" | "brand" | "source_id" | "page_setup">;
+  tpl: Omit<TemplateBase, "name" | "brand" | "source_id" | "page_setup" | "background_image" | "background_fit" | "background_opacity">;
 }
 
 export const STARTERS: Starter[] = [

@@ -38,6 +38,9 @@ export function NewLabelDialog({ open, onOpenChange, brands, onCreate, pending }
       brand: brand.trim() || "General",
       source_id: null,
       page_setup: DEFAULT_PAGE_SETUP,
+      background_image: "",
+      background_fit: "cover",
+      background_opacity: 1,
     });
   };
 

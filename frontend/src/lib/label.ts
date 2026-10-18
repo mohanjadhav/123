@@ -24,7 +24,7 @@ export const MM_TO_PX = 96 / 25.4;
 
 export const DEFAULT_PAGE_SETUP: PageSetup = {
   paper: "label", paper_w: 210, paper_h: 297, orientation: "portrait", cols: 0, rows: 0, gap_x: 0, gap_y: 0,
-  margin_top: 0, margin_right: 0, margin_bottom: 0, margin_left: 0, offset_x: 0, offset_y: 0, order: "across", start_position: 1,
+  margin_top: 0, margin_right: 0, margin_bottom: 0, margin_left: 0, offset_x: 0, offset_y: 0, order: "across", start_position: 1, dpi: 0,
 };
 
 const PLACEHOLDER = /\{\{\s*([^}]+?)\s*\}\}/g;
@@ -36,6 +36,7 @@ export function placeholdersOf(tpl: TemplateBase): string[] {
       for (const m of src.matchAll(PLACEHOLDER)) set.add(m[1]);
     }
   }
+  for (const m of (tpl.background_image ?? "").matchAll(PLACEHOLDER)) set.add(m[1]);
   return [...set];
 }
 
@@ -86,6 +87,17 @@ export function newElement(type: LabelElement["type"], tpl: Pick<LabelShape, "wi
     show_text: true,
     image_url: "",
     rotation: 0,
+    shape: "rect",
+    fill2: "",
+    gradient_angle: 90,
+    stroke_style: "solid",
+    opacity: 1,
+    arrows: "none",
+    icon: "",
+    image_fit: "contain",
+    table_rows: 3,
+    table_cols: 2,
+    table_header: true,
   };
   const fit = (w: number, h: number) => ({ w: Math.min(w, tpl.width_mm - 6), h: Math.min(h, tpl.height_mm - 6) });
   switch (type) {
@@ -101,6 +113,14 @@ export function newElement(type: LabelElement["type"], tpl: Pick<LabelShape, "wi
       return { ...base, ...fit(20, 10), stroke_width: 0.5, radius: 1 };
     case "image":
       return { ...base, ...fit(18, 12) };
+    case "line":
+      return { ...base, ...fit(30, 2), stroke: "#111827", stroke_width: 0.4 };
+    case "icon": {
+      const s = Math.min(10, tpl.width_mm - 6, tpl.height_mm - 6);
+      return { ...base, w: s, h: s, icon: "veg", color: "#111827" };
+    }
+    case "table":
+      return { ...base, ...fit(44, 15), font_size: 7, stroke_width: 0.25, fill: "#F3F4F6", content: "Item|Value\nMRP|{{MRP}}\nNet Qty|1 N" };
   }
 }
 

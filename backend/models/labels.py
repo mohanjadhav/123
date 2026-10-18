@@ -4,7 +4,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-ElementType = Literal["text", "barcode", "qrcode", "rect", "image"]
+ElementType = Literal["text", "barcode", "qrcode", "rect", "image", "line", "icon", "table"]
+ShapeKind = Literal["rect", "ellipse", "triangle", "star", "arrow", "diamond", "hexagon"]
 BarcodeFormat = Literal["CODE128", "CODE39", "EAN13", "UPC", "ITF14"]
 
 
@@ -35,7 +36,19 @@ class LabelElement(BaseModel):
     barcode_format: BarcodeFormat = "CODE128"
     show_text: bool = True
     image_url: str = ""
-    rotation: int = 0
+    rotation: float = 0  # degrees, any angle
+    # high-definition design extras
+    shape: ShapeKind = "rect"  # for type "rect"
+    fill2: str = ""  # gradient end colour ("" = solid fill)
+    gradient_angle: float = 90
+    stroke_style: Literal["solid", "dashed", "dotted"] = "solid"
+    opacity: float = Field(default=1, ge=0, le=1)
+    arrows: Literal["none", "end", "both"] = "none"  # for type "line"
+    icon: str = ""  # icon-library key for type "icon"
+    image_fit: Literal["contain", "cover", "fill"] = "contain"
+    table_rows: int = Field(default=3, ge=1, le=30)
+    table_cols: int = Field(default=2, ge=1, le=12)
+    table_header: bool = True
 
 
 class PageSetup(BaseModel):
@@ -56,6 +69,7 @@ class PageSetup(BaseModel):
     offset_y: float = Field(default=0, ge=-50, le=50)
     order: Literal["across", "down"] = "across"
     start_position: int = Field(default=1, ge=1, le=1000)  # skip used labels on a partly used sheet
+    dpi: int = Field(default=0, ge=0, le=1200)  # printer resolution; 0 = vector/any. 203/300/600 snaps barcode bars to printer dots
 
 
 class TemplateBase(BaseModel):
@@ -64,6 +78,9 @@ class TemplateBase(BaseModel):
     width_mm: float = Field(gt=0, le=400)
     height_mm: float = Field(gt=0, le=400)
     background: str = "#FFFFFF"
+    background_image: str = ""  # full-label background picture (library URL, link or {{column}})
+    background_fit: Literal["cover", "contain", "fill"] = "cover"
+    background_opacity: float = Field(default=1, ge=0, le=1)
     elements: List[LabelElement] = []
     source_id: Optional[str] = None  # remembered print-data sheet
     page_setup: PageSetup = Field(default_factory=PageSetup)
